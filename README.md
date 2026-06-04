@@ -120,10 +120,10 @@ pro2input/
 - Run `tools/xinput_rumble_test.py` while `main.py` is active.
 
 **Forza Horizon 6: no rumble in-game**
-- FH6 may only send vibration to Xbox One / Series X\|S controllers (Impulse Triggers).
-- `VX360Gamepad` does not support Impulse Triggers, so FH6 may skip rumble entirely.
-- Try running `tools/fh6_rumble_debug.py --ds4` to see if FH6 sends rumble to a DS4 controller.
-- As a workaround, use Steam Input or DS4Windows to present the controller as an Xbox One / DS4 pad.
+- FH6 does **not** send vibration data to virtual controllers created by ViGEmBus, even in Xbox 360 or DS4 mode.
+- This is a known limitation of virtual gamepads with FH6, not a bug in this project.
+- The `fh6_rumble_debug.py` tool will only show `led=1/16` (controller init) but no actual `large_motor` / `small_motor` data during gameplay.
+- **Workaround:** Use Steam Input to present the controller as a generic gamepad, or use a physical Xbox controller via HidHide for rumble.
 
 ### Acknowledgments
 
@@ -248,10 +248,10 @@ pro2input/
 - `main.py` 実行中に `tools/xinput_rumble_test.py` を実行してみてください。
 
 **Forza Horizon 6 でゲーム内で振動しない**
-- FH6 は Xbox One / Series X|S コントローラー（Impulse Triggers 対応）にしか振動を送らない可能性があります。
-- `VX360Gamepad` は Impulse Triggers をサポートしていないため、FH6 が振動をスキップしている可能性があります。
-- `python tools/fh6_rumble_debug.py --ds4` を試し、DS4 モードで振動データが来るか確認してください。
-- 回避策として、Steam Input や DS4Windows を使って Xbox One / DS4 パッドとして認識させる方法があります。
+- FH6 は **ViGEmBus による仮想コントローラー（Xbox 360 / DS4 両方）に振動データを送信しません**。
+- これは仮想ゲームパッドの既知の限界であり、本プロジェクトのバグではありません。
+- `fh6_rumble_debug.py` で確認できるのは `led=1/16`（コントローラー初期化）のみで、ゲームプレイ中の `large_motor` / `small_motor` データは一切来ません。
+- **回避策:** Steam Input を使ってコントローラーを汎用ゲームパッドとして認識させるか、HidHide を使って物理 Xbox コントローラーのみを使用する。
 
 ### 謝辞
 
