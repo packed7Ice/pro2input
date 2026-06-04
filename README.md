@@ -104,6 +104,7 @@ pro2input/
 | `tools/xinput_rumble_test.py` | Test XInput force-feedback |
 | `tools/rumble_hid_control_test.py` | Direct USB rumble debug |
 | `tools/fh6_rumble_debug.py` | Log FH6 rumble events (supports Xbox 360 / DS4 mode) |
+| `tools/settings_ui.py` | Launch GUI for button remapping and configuration |
 
 ### Troubleshooting
 
@@ -232,6 +233,7 @@ pro2input/
 | `tools/xinput_rumble_test.py` | XInput 振動のテスト |
 | `tools/rumble_hid_control_test.py` | USB 直振動デバッグ |
 | `tools/fh6_rumble_debug.py` | FH6 の振動イベントを記録（Xbox 360 / DS4 両対応） |
+| `tools/settings_ui.py` | ボタンリマッピング・設定 GUI の起動 |
 
 ### トラブルシューティング
 

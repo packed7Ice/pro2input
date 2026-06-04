@@ -4,22 +4,21 @@ mapping/xbox360_mapper.py
 Maps parsed Switch 2 Pro Controller inputs to a virtual Xbox 360 gamepad
 using vgamepad (ViGEmBus).
 
-Handles:
-- Button mapping (positional / physical feel consistent)
-- Stick axes (with polarity correction for joy.cpl compatibility)
-- Trigger values (analog output)
+Supports configurable button remapping, stick inversion, and trigger synthesis.
 """
 
 import vgamepad as vg
 
 from core.input_parser import parse_buttons, parse_sticks, synthesize_triggers
+from mapping.xbox360_codes import XBOX_BUTTON_CODES
 
 
 class Xbox360Mapper:
     """Virtual Xbox 360 gamepad mapper and updater."""
 
-    def __init__(self):
+    def __init__(self, settings=None):
         self.gamepad = vg.VX360Gamepad()
+        self.settings = settings
 
     def update_from_payload(self, payload: list):
         """Parse a Switch input payload and update the virtual Xbox 360 state."""
@@ -27,38 +26,49 @@ class Xbox360Mapper:
         lx, ly, rx, ry = parse_sticks(payload)
         lt, rt = synthesize_triggers(buttons)
 
-        # Face buttons (positional mapping)
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A, buttons['B'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_B, buttons['A'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_X, buttons['Y'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_Y, buttons['X'])
+        # Apply configurable stick inversion
+        if self.settings:
+            if self.settings.get("stick.left.invert_x", False):
+                lx = -lx
+            if self.settings.get("stick.left.invert_y", False):
+                ly = -ly
+            if self.settings.get("stick.right.invert_x", False):
+                rx = -rx
+            if self.settings.get("stick.right.invert_y", True):
+                ry = -ry
+        else:
+            # Default: right stick Y inverted
+            ry = -ry
 
-        # Shoulder buttons
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER, buttons['L'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER, buttons['R'])
+        # Apply configurable button mapping
+        mapping = self.settings.get("button_mapping") if self.settings else None
+        if mapping is None:
+            mapping = {
+                "B": "A", "A": "B", "Y": "X", "X": "Y",
+                "R": "RIGHT_SHOULDER", "ZR": "RIGHT_TRIGGER",
+                "Plus": "START", "RStick": "RIGHT_THUMB",
+                "Down": "DPAD_DOWN", "Right": "DPAD_RIGHT",
+                "Left": "DPAD_LEFT", "Up": "DPAD_UP",
+                "L": "LEFT_SHOULDER", "ZL": "LEFT_TRIGGER",
+                "Minus": "BACK", "LStick": "LEFT_THUMB",
+                "Home": "GUIDE",
+            }
 
-        # System buttons
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK, buttons['Minus'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_START, buttons['Plus'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_GUIDE, buttons['Home'])
+        for switch_name, xbox_name in mapping.items():
+            if xbox_name is None:
+                continue
+            pressed = buttons.get(switch_name, False)
+            code = XBOX_BUTTON_CODES.get(xbox_name)
+            if code:
+                self._set_button(code, pressed)
 
-        # Stick press buttons
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB, buttons['LStick'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB, buttons['RStick'])
-
-        # D-Pad
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP, buttons['Up'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN, buttons['Down'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT, buttons['Left'])
-        self._set_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT, buttons['Right'])
-
-        # Left stick: Switch 2 Pro left stick Y raw has same polarity as Xbox 360
+        # Left stick
         self.gamepad.left_joystick(x_value=lx, y_value=ly)
 
-        # Right stick: Switch 2 Pro right stick Y raw has opposite polarity
-        self.gamepad.right_joystick(x_value=rx, y_value=-ry)
+        # Right stick
+        self.gamepad.right_joystick(x_value=rx, y_value=ry)
 
-        # Triggers (synthesized from digital ZL/ZR)
+        # Triggers (analog)
         self.gamepad.left_trigger(value=lt)
         self.gamepad.right_trigger(value=rt)
 

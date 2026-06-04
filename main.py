@@ -15,9 +15,13 @@ import sys
 from core.controller_usb import Switch2ProControllerUSB
 from core.rumble_manager import RumbleManager
 from mapping.xbox360_mapper import Xbox360Mapper
+from config.settings import Settings
 
 
 def main():
+    # Load user settings
+    settings = Settings()
+
     print("=" * 80)
     print(" Switch 2 Pro Controller -> Xbox 360 Input Converter")
     print(" With experimental HD Rumble feedback")
@@ -25,7 +29,7 @@ def main():
 
     # Step 1: Create virtual Xbox 360 controller
     print("\n[INFO] Creating virtual Xbox 360 controller...")
-    mapper = Xbox360Mapper()
+    mapper = Xbox360Mapper(settings=settings)
     print("[OK ] Virtual Xbox 360 controller created.")
 
     # Step 2: Find and initialize physical controller
@@ -44,11 +48,17 @@ def main():
     print("[OK ] Controller initialized and HID mode enabled.")
 
     # Step 3: Setup rumble feedback
-    print("\n[INFO] Initializing rumble feedback manager...")
-    rumble = RumbleManager(controller)
-    mapper.register_rumble_callback(rumble.on_xinput_rumble)
-    rumble.start()
-    print("[OK ] Rumble manager started (experimental).")
+    rumble_enabled = settings.get("rumble.enabled", True)
+    if rumble_enabled:
+        strength = settings.get("rumble.strength", 1.0)
+        print(f"\n[INFO] Initializing rumble feedback manager (strength={strength})...")
+        rumble = RumbleManager(controller, strength=strength)
+        mapper.register_rumble_callback(rumble.on_xinput_rumble)
+        rumble.start()
+        print("[OK ] Rumble manager started (experimental).")
+    else:
+        print("\n[INFO] Rumble is disabled in config.")
+        rumble = None
 
     print("\n[INFO] Starting input loop. Press Ctrl+C to stop.")
     print("[INFO] Open your game and enjoy!\n")
@@ -66,7 +76,8 @@ def main():
     finally:
         # Cleanup
         print("\n[INFO] Cleaning up...")
-        rumble.stop()
+        if rumble:
+            rumble.stop()
         controller.cleanup()
         mapper.reset()
         print("[OK ] Virtual controller reset.")

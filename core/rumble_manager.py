@@ -36,8 +36,9 @@ class RumbleManager:
     - Queues packets for the background sender thread.
     """
 
-    def __init__(self, usb_controller):
+    def __init__(self, usb_controller, strength: float = 1.0):
         self.usb = usb_controller
+        self._strength = max(0.0, min(strength, 2.0))
         self._queue: queue.Queue[bytes] = queue.Queue(maxsize=2)
         self._latest_large = 0
         self._latest_small = 0
@@ -81,8 +82,9 @@ class RumbleManager:
         - large_motor (0-255) -> Low  frequency amplitude
         - small_motor (0-255) -> High frequency amplitude
         """
-        hf_amp = int((small_motor / 255.0) * RUMBLE_AMP_MAX)
-        lf_amp = int((large_motor / 255.0) * RUMBLE_AMP_MAX)
+        # Scale 0-255 into safe amplitude range, then apply user strength multiplier
+        hf_amp = int((small_motor / 255.0) * RUMBLE_AMP_MAX * self._strength)
+        lf_amp = int((large_motor / 255.0) * RUMBLE_AMP_MAX * self._strength)
         hf_amp = min(hf_amp, RUMBLE_AMP_MAX)
         lf_amp = min(lf_amp, RUMBLE_AMP_MAX)
 
