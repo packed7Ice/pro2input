@@ -200,10 +200,11 @@ def main():
                     ry = normalize_stick(ry_raw)
                     
                     # Triggers
-                    lt_raw = payload[0x0C]
-                    rt_raw = payload[0x0D]
-                    lt = normalize_trigger(lt_raw)
-                    rt = normalize_trigger(rt_raw)
+                    # NOTE: Switch 2 Pro Controller reports ZL/ZR as digital buttons only.
+                    # It does not provide independent analog trigger depth values.
+                    # We synthesize 0/255 trigger values from the ZL/ZR button states.
+                    lt = 255 if buttons['ZL'] else 0
+                    rt = 255 if buttons['ZR'] else 0
                     
                     # Update virtual gamepad
                     # Positional button mapping (physical feel consistent)
@@ -239,13 +240,15 @@ def main():
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT) if buttons['Left'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT) if buttons['Right'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
                     
-                    # Left stick (Y-axis inverted: Switch UP is negative, Xbox UP is positive)
-                    gamepad.left_joystick(x_value=lx, y_value=-ly)
+                    # Left stick: Switch 2 Pro's left stick Y raw value appears to have
+                    # the same polarity as Xbox 360 (UP = positive), so no inversion needed.
+                    gamepad.left_joystick(x_value=lx, y_value=ly)
                     
-                    # Right stick (Y-axis inverted)
+                    # Right stick: Switch 2 Pro's right stick Y raw value has opposite
+                    # polarity to Xbox 360 (UP = negative raw), so we invert.
                     gamepad.right_joystick(x_value=rx, y_value=-ry)
                     
-                    # Triggers (analog)
+                    # Triggers (synthesized from digital ZL/ZR buttons)
                     gamepad.left_trigger(value=lt)
                     gamepad.right_trigger(value=rt)
                     
