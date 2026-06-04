@@ -107,11 +107,16 @@ class Switch2ProControllerUSB:
         return None
 
     def send_command(self, cmd: bytes) -> bool:
-        """Send a raw command via Interface 1 Bulk OUT."""
+        """
+        Send a raw command via Interface 1 Bulk OUT.
+        Interface 1 is temporarily claimed because it was released after init.
+        """
         if self.device is None or self.ep1_out is None:
             return False
         try:
+            usb.util.claim_interface(self.device, USB_INTERFACE_NUMBER)
             self.device.write(self.ep1_out, cmd)
+            usb.util.release_interface(self.device, USB_INTERFACE_NUMBER)
             return True
         except usb.core.USBError:
             return False
