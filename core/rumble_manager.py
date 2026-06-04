@@ -2,16 +2,16 @@
 core/rumble_manager.py
 
 Converts Xbox 360 force-feedback (large_motor, small_motor) into
-Switch Pro Controller HD Rumble data and sends it over USB.
+Switch 2 Pro Controller HD Rumble packets and sends them via HID Output Report.
 
-NOTE:
-- This is an experimental implementation. Switch 2 Pro's exact rumble
-  command format is not yet publicly documented.
-- We reuse the original Nintendo Switch Pro Controller rumble protocol
-  (subcommand 0x10 / 0x01 with 8-byte rumble data) as a best-effort
-  translation. HD Rumble's full waveform control is not possible
-  because XInput only provides two intensity values (0-255).
-- Safe amplitude limits are enforced to protect linear actuators.
+Based on SDL's official implementation:
+  libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
+
+Key differences from original Switch Pro Controller:
+  - Report ID: 0x02 (not 0x10/0x01)
+  - Transport: HID Output Report via ctrl_transfer (not Bulk OUT)
+  - Packet size: exactly 64 bytes
+  - Actuator encoding: 5 bytes each with different bit packing
 """
 
 import time
@@ -19,9 +19,11 @@ import threading
 import queue
 
 from core.constants import (
-    RUMBLE_NEUTRAL,
-    RUMBLE_HF_AMP_MAX,
-    RUMBLE_LF_AMP_MAX,
+    SWITCH2_RUMBLE_REPORT_ID,
+    RUMBLE_NEUTRAL_ACTUATOR,
+    RUMBLE_HF_FREQ,
+    RUMBLE_LF_FREQ,
+    RUMBLE_AMP_MAX,
 )
 
 
@@ -30,8 +32,8 @@ class RumbleManager:
     Thread-safe rumble manager.
 
     - Receives (large_motor, small_motor) values from vgamepad callbacks.
-    - Converts them to Switch Pro rumble data packets.
-    - Queues packets for the USB sender thread.
+    - Builds 64-byte Switch 2 Pro HID Output Reports.
+    - Queues packets for the background sender thread.
     """
 
     def __init__(self, usb_controller):
@@ -42,6 +44,7 @@ class RumbleManager:
         self._lock = threading.Lock()
         self._sender_thread: threading.Thread | None = None
         self._running = False
+        self._seq = 0
 
     def start(self):
         """Start the background sender thread."""
@@ -72,59 +75,64 @@ class RumbleManager:
 
     def _build_rumble_packet(self, large_motor: int, small_motor: int) -> bytes:
         """
-        Build an 8-byte rumble data block for left/right linear actuators.
+        Build a 64-byte Switch 2 Pro HID Output Report for rumble.
 
-        Mapping:
-        - large_motor (0-255)  -> Low Frequency amplitude (left & right)
-        - small_motor (0-255)  -> High Frequency amplitude (left & right)
-
-        We use a fixed frequency pair for simplicity and safety.
+        SDL maps:
+        - large_motor (0-255) -> Low  frequency amplitude
+        - small_motor (0-255) -> High frequency amplitude
         """
-        # Scale 0-255 into safe amplitude ranges
-        lf_amp = int(0x40 + (large_motor / 255.0) * (RUMBLE_LF_AMP_MAX - 0x40))
-        hf_amp = int((small_motor / 255.0) * RUMBLE_HF_AMP_MAX)
+        # Scale 0-255 into safe amplitude range
+        hf_amp = int((small_motor / 255.0) * RUMBLE_AMP_MAX)
+        lf_amp = int((large_motor / 255.0) * RUMBLE_AMP_MAX)
 
         # Clamp for safety
-        lf_amp = min(lf_amp, RUMBLE_LF_AMP_MAX)
-        hf_amp = min(hf_amp, RUMBLE_HF_AMP_MAX)
+        hf_amp = min(hf_amp, RUMBLE_AMP_MAX)
+        lf_amp = min(lf_amp, RUMBLE_AMP_MAX)
 
-        # Fixed frequencies (safe defaults)
-        hf_freq = 0x0074  # ~600 Hz
-        lf_freq = 0x5C     # ~260 Hz
+        # Encode left actuator rumble data (5 bytes)
+        left_rumble = self._encode_actuator(RUMBLE_HF_FREQ, hf_amp, RUMBLE_LF_FREQ, lf_amp)
 
-        # Left actuator rumble data (4 bytes)
-        left = self._encode_rumble(hf_freq, hf_amp, lf_freq, lf_amp)
-        # Right actuator rumble data (4 bytes)
-        right = self._encode_rumble(hf_freq, hf_amp, lf_freq, lf_amp)
+        # Build 64-byte report
+        self._seq = (self._seq + 1) & 0x0F
+        seq_byte = 0x50 | self._seq
 
-        return left + right
+        report = bytearray(64)
+        report[0] = SWITCH2_RUMBLE_REPORT_ID   # 0x02
+        report[1] = seq_byte
+        report[2:7] = left_rumble                # left actuator (5 bytes)
+        # bytes 7-16: padding (already 0x00)
+        report[17] = seq_byte                    # sequence copy
+        report[18:23] = left_rumble            # right actuator (often same as left)
+        # bytes 23-63: padding (already 0x00)
+
+        return bytes(report)
 
     @staticmethod
-    def _encode_rumble(hf_freq: int, hf_amp: int, lf_freq: int, lf_amp: int) -> bytes:
+    def _encode_actuator(high_freq: int, high_amp: int, low_freq: int, low_amp: int) -> bytes:
         """
-        Encode one actuator (4 bytes) based on Nintendo Switch Pro format.
+        Encode one actuator (5 bytes) per SDL's EncodeHDRumble.
 
-        Bytes:
-        0-1: High frequency (little-endian-ish packed) + amplitude
-        2-3: Low frequency + amplitude
+        SDL source (C):
+            rumble_data[0] = (Uint8)(high_freq & 0xFF);
+            rumble_data[1] = (Uint8)(((high_amp >> 4) & 0xFC) | ((high_freq >> 8) & 0x03));
+            rumble_data[2] = (Uint8)((high_amp >> 12) | (low_freq << 4));
+            rumble_data[3] = (Uint8)((low_amp & 0xC0) | ((low_freq >> 4) & 0x3F));
+            rumble_data[4] = (Uint8)(low_amp >> 8);
         """
-        # HF: byte0 = freq_low, byte1 = amp + freq_high
-        byte0 = hf_freq & 0xFF
-        byte1 = hf_amp + ((hf_freq >> 8) & 0xFF)
-
-        # LF: byte2 = freq + amp_high, byte3 = amp_low
-        lf_amp_word = (lf_amp << 8) | 0x40
-        byte2 = lf_freq + ((lf_amp_word >> 8) & 0xFF)
-        byte3 = lf_amp_word & 0xFF
-
-        return bytes([byte0, byte1, byte2, byte3])
+        data = bytearray(5)
+        data[0] = high_freq & 0xFF
+        data[1] = ((high_amp >> 4) & 0xFC) | ((high_freq >> 8) & 0x03)
+        data[2] = (high_amp >> 12) | ((low_freq << 4) & 0xFF)
+        data[3] = (low_amp & 0xC0) | ((low_freq >> 4) & 0x3F)
+        data[4] = (low_amp >> 8) & 0xFF
+        return bytes(data)
 
     def _sender_loop(self):
         """
         Background thread: dequeue rumble packets and send them to the controller.
         Sends a neutral packet when no rumble is active to silence the motors.
         """
-        last_packet = RUMBLE_NEUTRAL
+        last_was_neutral = True
         while self._running:
             try:
                 packet = self._queue.get(timeout=0.05)
@@ -132,27 +140,31 @@ class RumbleManager:
                 packet = None
 
             if packet:
-                last_packet = packet
-                self._send_rumble(packet)
+                self._send_packet(packet)
+                last_was_neutral = False
             else:
                 # If no new rumble command, and motors were active, send neutral
-                # to stop vibration when the game stops requesting it.
-                if last_packet != RUMBLE_NEUTRAL:
-                    self._send_rumble(RUMBLE_NEUTRAL)
-                    last_packet = RUMBLE_NEUTRAL
+                if not last_was_neutral:
+                    neutral = self._build_neutral_packet()
+                    self._send_packet(neutral)
+                    last_was_neutral = True
 
             time.sleep(0.01)
 
-    def _send_rumble(self, rumble_data: bytes):
-        """
-        Send rumble data to the Switch 2 Pro Controller via Interface 1 Bulk OUT.
+    def _build_neutral_packet(self) -> bytes:
+        """Build a 64-byte neutral (no vibration) report."""
+        self._seq = (self._seq + 1) & 0x0F
+        seq_byte = 0x50 | self._seq
+        neutral = RUMBLE_NEUTRAL_ACTUATOR
 
-        Command format (experimental):
-        [0x10, 0x91, 0x00, timer, ...rumble_data...]
-        We reuse the original Switch Pro Controller's OUTPUT 0x10 prefix.
-        If Switch 2 uses a different format, this packet may be ignored by the device.
-        """
-        # Timer byte: simple incrementing counter (0x00-0x0F loops)
-        timer = int(time.time() * 100) & 0x0F
-        cmd = bytes([0x10, 0x91, 0x00, timer]) + rumble_data
-        self.usb.send_command(cmd)
+        report = bytearray(64)
+        report[0] = SWITCH2_RUMBLE_REPORT_ID
+        report[1] = seq_byte
+        report[2:7] = neutral
+        report[17] = seq_byte
+        report[18:23] = neutral
+        return bytes(report)
+
+    def _send_packet(self, packet: bytes):
+        """Send the 64-byte HID Output Report via USB Control Transfer."""
+        self.usb.send_hid_output_report(SWITCH2_RUMBLE_REPORT_ID, packet[1:])

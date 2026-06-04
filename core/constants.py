@@ -16,6 +16,15 @@ USB_INTERFACE_NUMBER = 1  # Bulk OUT interface for initialization
 # Initialization Commands (from enable_hid.py / nsw2_init_and_read.py)
 # Sent via Interface 1 (Bulk OUT) to activate HID report mode.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Initialization Commands (based on SDL's validated sequence for Switch 2 Pro)
+# See: libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
+# ---------------------------------------------------------------------------
+# CRITICAL FIX:
+#   The old sequence had 0x10 at index 12 (rumble enable) which is WRONG.
+#   SDL uses 0x01 for rumble enablement. 0x10 was the original Switch Pro
+#   subcommand prefix and does not apply to Switch 2 Pro over USB.
+# ---------------------------------------------------------------------------
 INIT_COMMANDS = [
     bytes([0x03, 0x91, 0x00, 0x0D, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
     bytes([0x07, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
@@ -29,7 +38,8 @@ INIT_COMMANDS = [
     bytes([0x0A, 0x91, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x35, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x0C, 0x91, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]),
     bytes([0x03, 0x91, 0x00, 0x0A, 0x00, 0x04, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00]),
-    bytes([0x10, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
+    # FIXED: was 0x10, should be 0x01 (SDL validated "enable rumble" command)
+    bytes([0x01, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x01, 0x91, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x03, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00]),
     bytes([0x0A, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x03, 0x00, 0x00]),
@@ -49,17 +59,35 @@ TRIGGER_DIGITAL_ON = 255
 TRIGGER_DIGITAL_OFF = 0
 
 # ---------------------------------------------------------------------------
-# Rumble Constants (experimental, based on original Switch Pro Controller)
+# Rumble Constants (Switch 2 Pro specific, based on SDL implementation)
+# See: libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
 # ---------------------------------------------------------------------------
-# Neutral rumble data: [00 01 40 40 00 01 40 40] (320Hz 0.0f, 160Hz 0.0f)
-RUMBLE_NEUTRAL = bytes([0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40])
+# Switch 2 Pro uses a completely different rumble protocol from original Switch Pro.
+# - Report ID for rumble output: 0x02
+# - Packet size: exactly 64 bytes (HID Output Report)
+# - Sent via Interface 0 (HID), NOT Interface 1 (Bulk OUT).
+# - Each actuator uses 5 bytes of HD Rumble data (different bit packing).
+# ---------------------------------------------------------------------------
 
-# Safe amplitude ranges (do not exceed to avoid damaging linear actuators)
-RUMBLE_HF_AMP_MIN = 0x00
-RUMBLE_HF_AMP_MAX = 0xC8  # ~1.0f amplitude equivalent (safe max)
-RUMBLE_LF_AMP_MIN = 0x40
-RUMBLE_LF_AMP_MAX = 0x72  # safe max per Nintendo's HID library
+# Report ID for Switch 2 Pro rumble output report
+SWITCH2_RUMBLE_REPORT_ID = 0x02
 
-# Fixed frequencies for simple mapping
-RUMBLE_HF_FREQ = 0x0074  # ~600Hz (high frequency band)
-RUMBLE_LF_FREQ = 0x5C     # ~260Hz (low frequency band)
+# Neutral (no vibration) 5-byte actuator data (decoded from SDL defaults)
+# SDL default frequencies: high=0x187, low=0x112, amp=0 for both
+RUMBLE_NEUTRAL_ACTUATOR = bytes([0x00, 0x01, 0x40, 0x40, 0x40])
+
+# Packet layout (64 bytes total):
+#   [0]       = Report ID (0x02)
+#   [1]       = 0x50 | (seq & 0x0F)
+#   [2-6]     = Left actuator rumble data (5 bytes)
+#   [7-16]    = Padding (0x00)
+#   [17]      = 0x50 | (seq & 0x0F)  (sequence copy)
+#   [18-22]   = Right actuator rumble data (5 bytes, often copy of left)
+#   [23-63]   = Padding (0x00)
+
+# SDL default frequencies
+RUMBLE_HF_FREQ = 0x0187  # ~600 Hz high-frequency default
+RUMBLE_LF_FREQ = 0x0112  # ~260 Hz low-frequency default
+
+# Safe amplitude maximum (SDL clamps to 29000 out of UINT16_MAX=65535)
+RUMBLE_AMP_MAX = 29000

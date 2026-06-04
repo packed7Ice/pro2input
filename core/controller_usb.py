@@ -121,6 +121,55 @@ class Switch2ProControllerUSB:
         except usb.core.USBError:
             return False
 
+    def send_hid_output_report(self, report_id: int, data: bytes) -> bool:
+        """
+        Send an HID Output Report via USB Control Transfer (SET_REPORT).
+
+        For Switch 2 Pro rumble, the report must be exactly 64 bytes and use
+        report ID 0x02.  This method works regardless of whether Interface 0
+        is claimed by libusb or the Windows HID driver.
+
+        bmRequestType = 0x21 (HID class, host->device, interface)
+        bRequest      = 0x09 (SET_REPORT)
+        wValue        = 0x02RR (Output Report, Report ID = RR)
+        wIndex        = 0 (Interface 0)
+        data          = [ReportID] + payload, padded to report byte length
+        """
+        if self.device is None:
+            return False
+        # Determine expected report size from device descriptor if possible,
+        # otherwise default to 64 bytes (Switch 2 Pro standard).
+        report_size = 64
+        payload = bytes([report_id]) + data
+        if len(payload) < report_size:
+            payload = payload + bytes(report_size - len(payload))
+        elif len(payload) > report_size:
+            payload = payload[:report_size]
+
+        try:
+            self.device.ctrl_transfer(
+                bmRequestType=0x21,   # HID class, host->device, interface
+                bRequest=0x09,        # SET_REPORT
+                wValue=(0x0200 | report_id),  # Output Report type + ID
+                wIndex=0,             # Interface 0
+                data_or_wLength=payload
+            )
+            return True
+        except usb.core.USBError as e:
+            # Some backends require wIndex=0 even if interface is 1.
+            # Try again with wIndex=1 as fallback.
+            try:
+                self.device.ctrl_transfer(
+                    bmRequestType=0x21,
+                    bRequest=0x09,
+                    wValue=(0x0200 | report_id),
+                    wIndex=1,
+                    data_or_wLength=payload
+                )
+                return True
+            except usb.core.USBError:
+                return False
+
     def cleanup(self):
         """Release USB interfaces."""
         if self.device:
