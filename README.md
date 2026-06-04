@@ -121,7 +121,7 @@ pro2input/
 ### Acknowledgments
 
 - Rumble protocol derived from the official **[SDL](https://github.com/libsdl-org/SDL)** implementation ([`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)).
-- USB initialization sequence based on **[NSW2-controller-enabler](https://github.comikz87/NSW2-controller-enabler)** by [ikz87](https://github.com/ikz87).
+- USB initialization sequence based on **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** by [ikz87](https://github.com/ikz87).
 - HID report structure references **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)** by dekuNukem.
 
 ### License
