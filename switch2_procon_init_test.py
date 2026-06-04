@@ -172,11 +172,18 @@ def open_hid_device(path):
     return handle
 
 
-def write_device(handle, data):
-    """Write raw bytes to HID device."""
+def write_device(handle, data, report_size=64):
+    """Write raw bytes to HID device, padded to report_size."""
+    if len(data) < report_size:
+        data = data + [0] * (report_size - len(data))
+    elif len(data) > report_size:
+        data = data[:report_size]
     buf = (ctypes.c_ubyte * len(data))(*data)
     written = wintypes.DWORD(0)
     ret = kernel32.WriteFile(handle, buf, len(data), ctypes.byref(written), None)
+    err = kernel32.GetLastError()
+    if not ret:
+        print(f"  [WARN] WriteFile failed. Error: {err}")
     return ret != 0
 
 
