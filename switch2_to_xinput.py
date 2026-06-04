@@ -88,7 +88,7 @@ def normalize_stick(value, max_raw=4095):
     return int((value - center) / center * 32767)
 
 
-def normalize_trigger(value, min_in=0, max_in=255):
+def normalize_trigger(value, min_in=36, max_in=240):
     """Normalize trigger value to 0-255 range."""
     if value < min_in:
         value = min_in
@@ -101,35 +101,31 @@ def parse_buttons(payload):
     """Parse button bytes from payload[0x2:0x5] based on enable_hid.py reference."""
     b = payload[2:5]
     return {
-        # Byte 0 (buttons[0])
+        # Byte 0 (payload[0x2]) - Face buttons and right-side controls
         'B': bool(b[0] & 0x01),        # bit 0: B (bottom button)
         'A': bool(b[0] & 0x02),        # bit 1: A (right button)
         'Y': bool(b[0] & 0x04),        # bit 2: Y (left button)
         'X': bool(b[0] & 0x08),        # bit 3: X (top button)
-        'SR_R': bool(b[0] & 0x10),     # bit 4: SR (right joycon)
-        'SL_R': bool(b[0] & 0x20),     # bit 5: SL (right joycon)
-        'R': bool(b[0] & 0x40),        # bit 6: R (right shoulder)
-        'ZR': bool(b[0] & 0x80),       # bit 7: ZR (right trigger)
+        'R': bool(b[0] & 0x10),        # bit 4: R (right shoulder)
+        'ZR': bool(b[0] & 0x20),       # bit 5: ZR (right trigger)
+        'Plus': bool(b[0] & 0x40),     # bit 6: Plus (+)
+        'RStick': bool(b[0] & 0x80),   # bit 7: RStick press
         
-        # Byte 1 (buttons[1])
-        'Minus': bool(b[1] & 0x01),    # bit 0: Minus
-        'Plus': bool(b[1] & 0x02),     # bit 1: Plus
-        'RStick': bool(b[1] & 0x04),   # bit 2: RStick press
-        'LStick': bool(b[1] & 0x08),   # bit 3: LStick press
-        'Home': bool(b[1] & 0x10),     # bit 4: Home
-        'Capture': bool(b[1] & 0x20),   # bit 5: Capture (Screenshot)
-        'CButton': bool(b[1] & 0x40),  # bit 6: C Button (Game Chat)
-        'GRButton': bool(b[1] & 0x80),  # bit 7: GR (Back button)
+        # Byte 1 (payload[0x3]) - D-Pad and left-side controls
+        'Down': bool(b[1] & 0x01),     # bit 0: D-Pad Down
+        'Right': bool(b[1] & 0x02),    # bit 1: D-Pad Right
+        'Left': bool(b[1] & 0x04),     # bit 2: D-Pad Left
+        'Up': bool(b[1] & 0x08),       # bit 3: D-Pad Up
+        'L': bool(b[1] & 0x10),        # bit 4: L (left shoulder)
+        'ZL': bool(b[1] & 0x20),       # bit 5: ZL (left trigger)
+        'Minus': bool(b[1] & 0x40),    # bit 6: Minus (-)
+        'LStick': bool(b[1] & 0x80),   # bit 7: LStick press
         
-        # Byte 2 (buttons[2])
-        'Down': bool(b[2] & 0x01),     # bit 0: D-Pad Down
-        'Right': bool(b[2] & 0x02),   # bit 1: D-Pad Right
-        'Left': bool(b[2] & 0x04),    # bit 2: D-Pad Left
-        'Up': bool(b[2] & 0x08),       # bit 3: D-Pad Up
-        'SR_L': bool(b[2] & 0x10),     # bit 4: SR (left joycon)
-        'SL_L': bool(b[2] & 0x20),     # bit 5: SL (left joycon)
-        'L': bool(b[2] & 0x40),        # bit 6: L (left shoulder)
-        'ZL': bool(b[2] & 0x80),       # bit 7: ZL (left trigger)
+        # Byte 2 (payload[0x4]) - System buttons
+        'Home': bool(b[2] & 0x01),     # bit 0: Home
+        'Capture': bool(b[2] & 0x02),   # bit 1: Capture (Screenshot)
+        'CButton': bool(b[2] & 0x04),  # bit 2: C Button (Game Chat)
+        'GRButton': bool(b[2] & 0x08),  # bit 3: GR (Back button)
     }
 
 
