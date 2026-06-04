@@ -81,7 +81,8 @@ def main():
         print("[FATAL] Bulk OUT endpoint not found on Interface 1.")
         sys.exit(1)
 
-    print(f"[OK ] Interface 1: OUT=0x{ep_out:02X}, IN=0x{ep_in:02X if ep_in else 'N/A'}")
+    ep_in_str = f"0x{ep_in:02X}" if ep_in else "N/A"
+    print(f"[OK ] Interface 1: OUT=0x{ep_out:02X}, IN={ep_in_str}")
 
     # Step 4: Claim Interface 1
     print("[INFO] Claiming Interface 1...")
