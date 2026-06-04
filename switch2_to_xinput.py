@@ -237,25 +237,11 @@ def main():
                     # Capture (Screenshot) → mapped to unused button for now
                     # gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_??) if buttons['Capture'] else ...
                     
-                    # D-Pad (using POV/Hat Switch)
-                    if buttons['Up'] and buttons['Right']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP_RIGHT
-                    elif buttons['Up'] and buttons['Left']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP_LEFT
-                    elif buttons['Down'] and buttons['Right']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN_RIGHT
-                    elif buttons['Down'] and buttons['Left']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN_LEFT
-                    elif buttons['Up']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP
-                    elif buttons['Down']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN
-                    elif buttons['Left']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_LEFT
-                    elif buttons['Right']:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_RIGHT
-                    else:
-                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_NONE
+                    # D-Pad (individual buttons for Xbox 360)
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP) if buttons['Up'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP)
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN) if buttons['Down'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT) if buttons['Left'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT) if buttons['Right'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
                     
                     # Left stick (Y-axis inverted for Xbox)
                     gamepad.left_joystick(x_value=lx, y_value=-ly)
