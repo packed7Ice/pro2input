@@ -252,8 +252,8 @@ def main():
                     gamepad.left_trigger(value=lt)
                     gamepad.right_trigger(value=rt)
                     
-                    # Debug: print trigger values periodically
-                    print(f"LT={lt:3d} RT={rt:3d} | LX={lx:6d} LY={ly:6d} | RX={rx:6d} RY={ry:6d} | Buttons={ [k for k,v in buttons.items() if v] }")
+                    # Debug: print trigger values periodically (commented out to reduce console spam)
+                    # print(f"LT={lt:3d} RT={rt:3d} | LX={lx:6d} LY={ly:6d} | RX={rx:6d} RY={ry:6d} | Buttons={ [k for k,v in buttons.items() if v] }")
                     
                     # Update
                     gamepad.update()
