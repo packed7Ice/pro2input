@@ -42,6 +42,9 @@ cd pro2input
 pip install pyusb vgamepad
 ```
 
+Dependencies: [pyusb](https://github.com/pyusb/pyusb), [vgamepad](https://github.com/yannbouteiller/vgamepad)
+```
+
 ### Driver Setup (Zadig)
 
 1. Connect your Switch 2 Pro Controller via USB.
@@ -117,8 +120,9 @@ pro2input/
 
 ### Acknowledgments
 
-- Rumble protocol derived from the official **SDL** implementation (`SDL_hidapi_switch2.c`).
-- USB initialization sequence based on **NSW2-controller-enabler** by ikz87.
+- Rumble protocol derived from the official **[SDL](https://github.com/libsdl-org/SDL)** implementation ([`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)).
+- USB initialization sequence based on **[NSW2-controller-enabler](https://github.comikz87/NSW2-controller-enabler)** by [ikz87](https://github.com/ikz87).
+- HID report structure references **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)** by dekuNukem.
 
 ### License
 
@@ -146,7 +150,7 @@ See [LICENSE](LICENSE) for details.
 - Python 3.10 以降
 - Nintendo Switch 2 Pro コントローラー（USB 接続）
 - [ViGEmBus ドライバー](https://github.com/nefarius/ViGEmBus)（仮想 Xbox 360 コントローラー用）
-- [libusb-1.0.dll](https://libusb.info/)（`C:\\Windows\\System32` に配置）
+- [libusb-1.0.dll](https://libusb.info/)（`C:\Windows\System32` に配置）
 - [Zadig](https://zadig.akeo.ie/)（Interface 1 用 libusbK ドライバーインストール）
 
 ### インストール
@@ -159,6 +163,8 @@ cd pro2input
 # Python 依存関係をインストール
 pip install pyusb vgamepad
 ```
+
+依存ライブラリ: [pyusb](https://github.com/pyusb/pyusb), [vgamepad](https://github.com/yannbouteiller/vgamepad)
 
 ### ドライバー設定（Zadig）
 
@@ -235,8 +241,9 @@ pro2input/
 
 ### 謝辞
 
-- 振動プロトコルは公式 **SDL** 実装（`SDL_hidapi_switch2.c`）から導出しました。
-- USB 初期化シーケンスは ikz87 氏の **NSW2-controller-enabler** を参考にしました。
+- 振動プロトコルは公式 **[SDL](https://github.com/libsdl-org/SDL)** 実装（[`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)）から導出しました。
+- USB 初期化シーケンスは [ikz87](https://github.com/ikz87) 氏の **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** を参考にしました。
+- HID レポート構造の参考: **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)**（dekuNukem）
 
 ### ライセンス
 
