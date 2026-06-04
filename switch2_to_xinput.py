@@ -98,31 +98,38 @@ def normalize_trigger(value, min_in=0, max_in=255):
 
 
 def parse_buttons(payload):
-    """Parse button bytes from payload[0x2:0x5]."""
+    """Parse button bytes from payload[0x2:0x5] based on enable_hid.py reference."""
     b = payload[2:5]
     return {
-        'Y': bool(b[0] & 0x01),
-        'X': bool(b[0] & 0x02),
-        'B': bool(b[0] & 0x04),
-        'A': bool(b[0] & 0x08),
-        'SR_R': bool(b[0] & 0x10),
-        'SL_R': bool(b[0] & 0x20),
-        'R': bool(b[0] & 0x40),
-        'ZR': bool(b[0] & 0x80),
-        'Minus': bool(b[1] & 0x01),
-        'Plus': bool(b[1] & 0x02),
-        'RStick': bool(b[1] & 0x04),
-        'LStick': bool(b[1] & 0x08),
-        'Home': bool(b[1] & 0x10),
-        'Capture': bool(b[1] & 0x20),
-        'Down': bool(b[2] & 0x01),
-        'Up': bool(b[2] & 0x02),
-        'Right': bool(b[2] & 0x04),
-        'Left': bool(b[2] & 0x08),
-        'SR_L': bool(b[2] & 0x10),
-        'SL_L': bool(b[2] & 0x20),
-        'L': bool(b[2] & 0x40),
-        'ZL': bool(b[2] & 0x80),
+        # Byte 0 (buttons[0])
+        'B': bool(b[0] & 0x01),        # bit 0: B (bottom button)
+        'A': bool(b[0] & 0x02),        # bit 1: A (right button)
+        'Y': bool(b[0] & 0x04),        # bit 2: Y (left button)
+        'X': bool(b[0] & 0x08),        # bit 3: X (top button)
+        'SR_R': bool(b[0] & 0x10),     # bit 4: SR (right joycon)
+        'SL_R': bool(b[0] & 0x20),     # bit 5: SL (right joycon)
+        'R': bool(b[0] & 0x40),        # bit 6: R (right shoulder)
+        'ZR': bool(b[0] & 0x80),       # bit 7: ZR (right trigger)
+        
+        # Byte 1 (buttons[1])
+        'Minus': bool(b[1] & 0x01),    # bit 0: Minus
+        'Plus': bool(b[1] & 0x02),     # bit 1: Plus
+        'RStick': bool(b[1] & 0x04),   # bit 2: RStick press
+        'LStick': bool(b[1] & 0x08),   # bit 3: LStick press
+        'Home': bool(b[1] & 0x10),     # bit 4: Home
+        'Capture': bool(b[1] & 0x20),   # bit 5: Capture (Screenshot)
+        'CButton': bool(b[1] & 0x40),  # bit 6: C Button (Game Chat)
+        'GRButton': bool(b[1] & 0x80),  # bit 7: GR (Back button)
+        
+        # Byte 2 (buttons[2])
+        'Down': bool(b[2] & 0x01),     # bit 0: D-Pad Down
+        'Right': bool(b[2] & 0x02),   # bit 1: D-Pad Right
+        'Left': bool(b[2] & 0x04),    # bit 2: D-Pad Left
+        'Up': bool(b[2] & 0x08),       # bit 3: D-Pad Up
+        'SR_L': bool(b[2] & 0x10),     # bit 4: SR (left joycon)
+        'SL_L': bool(b[2] & 0x20),     # bit 5: SL (left joycon)
+        'L': bool(b[2] & 0x40),        # bit 6: L (left shoulder)
+        'ZL': bool(b[2] & 0x80),       # bit 7: ZL (left trigger)
     }
 
 
@@ -203,36 +210,60 @@ def main():
                     rt = normalize_trigger(rt_raw)
                     
                     # Update virtual gamepad
-                    # Buttons
-                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A) if buttons['A'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_B) if buttons['B'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
-                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_X) if buttons['X'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
-                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_Y) if buttons['Y'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_Y)
+                    # Positional button mapping (physical feel consistent)
+                    # Switch B (bottom) → Xbox A
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A) if buttons['B'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+                    # Switch A (right) → Xbox B
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_B) if buttons['A'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
+                    # Switch Y (left) → Xbox X
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_X) if buttons['Y'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
+                    # Switch X (top) → Xbox Y
+                    gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_Y) if buttons['X'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_Y)
                     
+                    # Shoulder buttons
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER) if buttons['L'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER) if buttons['R'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER)
                     
+                    # System buttons
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK) if buttons['Minus'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_START) if buttons['Plus'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_START)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_GUIDE) if buttons['Home'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_GUIDE)
                     
+                    # Stick press buttons
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB) if buttons['LStick'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB) if buttons['RStick'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB)
                     
-                    # D-Pad
-                    dpad = vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP
-                    if buttons['Up']:
-                        gamepad.press_button(dpad)
+                    # Extra buttons (Switch 2 specific - mapped to unused Xbox buttons)
+                    # Capture (Screenshot) → mapped to unused button for now
+                    # gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_??) if buttons['Capture'] else ...
+                    
+                    # D-Pad (using POV/Hat Switch)
+                    if buttons['Up'] and buttons['Right']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP_RIGHT
+                    elif buttons['Up'] and buttons['Left']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP_LEFT
+                    elif buttons['Down'] and buttons['Right']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN_RIGHT
+                    elif buttons['Down'] and buttons['Left']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN_LEFT
+                    elif buttons['Up']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_UP
+                    elif buttons['Down']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_DOWN
+                    elif buttons['Left']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_LEFT
+                    elif buttons['Right']:
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_RIGHT
                     else:
-                        gamepad.release_button(dpad)
+                        gamepad.dpad = vg.XUSB_DPAD.XUSB_GAMEPAD_DPAD_NONE
                     
-                    # Left stick
-                    gamepad.left_joystick(x_value=lx, y_value=ly)
+                    # Left stick (Y-axis inverted for Xbox)
+                    gamepad.left_joystick(x_value=lx, y_value=-ly)
                     
-                    # Right stick
-                    gamepad.right_joystick(x_value=rx, y_value=ry)
+                    # Right stick (Y-axis inverted for Xbox)
+                    gamepad.right_joystick(x_value=rx, y_value=-ry)
                     
-                    # Triggers
+                    # Triggers (analog)
                     gamepad.left_trigger(value=lt)
                     gamepad.right_trigger(value=rt)
                     
