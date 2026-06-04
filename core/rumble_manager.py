@@ -166,5 +166,5 @@ class RumbleManager:
         return bytes(report)
 
     def _send_packet(self, packet: bytes):
-        """Send the 64-byte HID Output Report via USB Control Transfer."""
-        self.usb.send_hid_output_report(SWITCH2_RUMBLE_REPORT_ID, packet[1:])
+        """Send the 64-byte HID Output Report via Interface 0 Interrupt OUT."""
+        self.usb.write_output_report(packet)

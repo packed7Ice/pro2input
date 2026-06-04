@@ -2,11 +2,7 @@
 tools/rumble_hid_control_test.py
 
 Sends rumble commands to the Switch 2 Pro Controller via
-USB Control Transfer using the CORRECT SDL-derived format:
-  - Report ID: 0x02
-  - Packet size: 64 bytes
-  - Sent via Interface 0 HID Output Report (SET_REPORT)
-  - 5-byte actuator encoding per SDL
+Interface 0 Interrupt OUT endpoint (0x01) with the SDL-derived format.
 
 Usage:
     python tools/rumble_hid_control_test.py
@@ -37,7 +33,7 @@ INIT_COMMANDS = [
     bytes([0x0A, 0x91, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x35, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x0C, 0x91, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]),
     bytes([0x03, 0x91, 0x00, 0x0A, 0x00, 0x04, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00]),
-    # FIXED: enable rumble command (was 0x10, corrected to 0x01 per SDL)
+    # FIXED: SDL validated "enable rumble" command (was incorrectly 0x10)
     bytes([0x01, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x01, 0x91, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x03, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00]),
@@ -45,7 +41,7 @@ INIT_COMMANDS = [
     bytes([0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
 ]
 
-# SDL EncodeHDRumble defaults
+# SDL defaults
 HF_FREQ = 0x0187
 LF_FREQ = 0x0112
 AMP_MAX = 29000
@@ -92,24 +88,10 @@ def init_controller(dev, ep_out):
         pass
 
 
-def send_report(dev, report: bytes) -> bool:
-    """Send 64-byte HID Output Report via SET_REPORT control transfer."""
-    try:
-        dev.ctrl_transfer(0x21, 0x09, 0x0202, 0, report)
-        return True
-    except usb.core.USBError:
-        # Fallback wIndex=1
-        try:
-            dev.ctrl_transfer(0x21, 0x09, 0x0202, 1, report)
-            return True
-        except usb.core.USBError:
-            return False
-
-
 def main():
     print("=" * 70)
-    print(" Switch 2 Pro Controller -- SDL-Derived Rumble Test")
-    print(" Uses Report ID 0x02, 64-byte HID Output Report")
+    print(" Switch 2 Pro Controller -- Interface 0 OUT Rumble Test")
+    print(" Uses SDL-derived 64-byte report via Interrupt OUT endpoint")
     print("=" * 70)
 
     dev = usb.core.find(idVendor=TARGET_VID, idProduct=TARGET_PID)
@@ -122,15 +104,35 @@ def main():
     cfg = dev.get_active_configuration()
 
     intf1 = usb.util.find_descriptor(cfg, bInterfaceNumber=USB_INTERFACE_NUMBER)
-    ep_out = None
+    ep1_out = None
     for ep in intf1:
         if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT:
-            ep_out = ep.bEndpointAddress
-    print(f"[OK ] Interface 1 Bulk OUT: 0x{ep_out:02X}")
+            ep1_out = ep.bEndpointAddress
+    print(f"[OK ] Interface 1 Bulk OUT: 0x{ep1_out:02X}")
 
-    print("\n[INFO] Initializing controller (with corrected 0x01 rumble enable)...")
-    init_controller(dev, ep_out)
+    # Find Interface 0 endpoints
+    intf0 = usb.util.find_descriptor(cfg, bInterfaceNumber=0)
+    ep0_in = None
+    ep0_out = None
+    for ep in intf0:
+        dir_ = usb.util.endpoint_direction(ep.bEndpointAddress)
+        if dir_ == usb.util.ENDPOINT_IN:
+            ep0_in = ep
+            print(f"[OK ] Interface 0 Interrupt IN : 0x{ep.bEndpointAddress:02X}")
+        elif dir_ == usb.util.ENDPOINT_OUT:
+            ep0_out = ep
+            print(f"[OK ] Interface 0 Interrupt OUT: 0x{ep.bEndpointAddress:02X}")
+
+    print("\n[INFO] Initializing controller...")
+    init_controller(dev, ep1_out)
     print("[OK ] Initialization complete.")
+
+    # Claim Interface 0 for output writes
+    try:
+        usb.util.claim_interface(dev, 0)
+        print("[OK ] Interface 0 claimed for output.")
+    except usb.core.USBError:
+        pass
 
     seq = 0
 
@@ -138,9 +140,13 @@ def main():
         nonlocal seq
         seq += 1
         report = build_rumble_report(seq, AMP_MAX, AMP_MAX)
-        print(f"    Sending 64-byte report [seq=0x{seq & 0x0F:01X}]...")
-        ok = send_report(dev, report)
-        return ok
+        print(f"    Sending 64-byte report [seq=0x{seq & 0x0F:01X}] to 0x{ep0_out.bEndpointAddress:02X}...")
+        try:
+            dev.write(ep0_out.bEndpointAddress, report)
+            return True
+        except usb.core.USBError as e:
+            print(f"    [FAIL] {e}")
+            return False
 
     def send_stop():
         nonlocal seq
@@ -153,7 +159,10 @@ def main():
         report[2:7] = neutral
         report[17] = seq_byte
         report[18:23] = neutral
-        send_report(dev, bytes(report))
+        try:
+            dev.write(ep0_out.bEndpointAddress, bytes(report))
+        except Exception:
+            pass
 
     print("\n" + "=" * 70)
     print(" Press Enter to send vibration (max amplitude)")
@@ -171,8 +180,6 @@ def main():
                 time.sleep(1.5)
                 send_stop()
                 print("    [OK ] Stopped.")
-            else:
-                print("    [FAIL] Control transfer failed.")
 
     print("\n[INFO] Cleaning up...")
     try:
