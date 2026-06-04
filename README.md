@@ -103,6 +103,7 @@ pro2input/
 | `tools/stick_raw_diagnostic.py` | Inspect raw stick values |
 | `tools/xinput_rumble_test.py` | Test XInput force-feedback |
 | `tools/rumble_hid_control_test.py` | Direct USB rumble debug |
+| `tools/fh6_rumble_debug.py` | Log FH6 rumble events (supports Xbox 360 / DS4 mode) |
 
 ### Troubleshooting
 
@@ -117,6 +118,12 @@ pro2input/
 **Rumble not working**
 - Ensure Interface 0 remains on the Windows HID driver (`HidUsb`).
 - Run `tools/xinput_rumble_test.py` while `main.py` is active.
+
+**Forza Horizon 6: no rumble in-game**
+- FH6 may only send vibration to Xbox One / Series X\|S controllers (Impulse Triggers).
+- `VX360Gamepad` does not support Impulse Triggers, so FH6 may skip rumble entirely.
+- Try running `tools/fh6_rumble_debug.py --ds4` to see if FH6 sends rumble to a DS4 controller.
+- As a workaround, use Steam Input or DS4Windows to present the controller as an Xbox One / DS4 pad.
 
 ### Acknowledgments
 
@@ -224,6 +231,7 @@ pro2input/
 | `tools/stick_raw_diagnostic.py` | スティック生値の確認 |
 | `tools/xinput_rumble_test.py` | XInput 振動のテスト |
 | `tools/rumble_hid_control_test.py` | USB 直振動デバッグ |
+| `tools/fh6_rumble_debug.py` | FH6 の振動イベントを記録（Xbox 360 / DS4 両対応） |
 
 ### トラブルシューティング
 
@@ -238,6 +246,12 @@ pro2input/
 **振動しない**
 - Interface 0 が Windows 標準 HID ドライバー（`HidUsb`）のままであることを確認してください。
 - `main.py` 実行中に `tools/xinput_rumble_test.py` を実行してみてください。
+
+**Forza Horizon 6 でゲーム内で振動しない**
+- FH6 は Xbox One / Series X|S コントローラー（Impulse Triggers 対応）にしか振動を送らない可能性があります。
+- `VX360Gamepad` は Impulse Triggers をサポートしていないため、FH6 が振動をスキップしている可能性があります。
+- `python tools/fh6_rumble_debug.py --ds4` を試し、DS4 モードで振動データが来るか確認してください。
+- 回避策として、Steam Input や DS4Windows を使って Xbox One / DS4 パッドとして認識させる方法があります。
 
 ### 謝辞
 
