@@ -72,13 +72,13 @@ libusbK.UsbK_Free.argtypes = [ctypes.c_void_p]
 
 libusbK.UsbK_WritePipe.restype = wintypes.BOOL
 libusbK.UsbK_WritePipe.argtypes = [
-    ctypes.c_void_p, wintypes.UCHAR, ctypes.c_void_p,
+    ctypes.c_void_p, wintypes.BYTE, ctypes.c_void_p,
     wintypes.UINT, ctypes.POINTER(wintypes.UINT), ctypes.c_void_p
 ]
 
 libusbK.UsbK_ReadPipe.restype = wintypes.BOOL
 libusbK.UsbK_ReadPipe.argtypes = [
-    ctypes.c_void_p, wintypes.UCHAR, ctypes.c_void_p,
+    ctypes.c_void_p, wintypes.BYTE, ctypes.c_void_p,
     wintypes.UINT, ctypes.POINTER(wintypes.UINT), ctypes.c_void_p
 ]
 
