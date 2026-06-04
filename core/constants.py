@@ -13,13 +13,9 @@ TARGET_PID = 0x2069
 USB_INTERFACE_NUMBER = 1  # Bulk OUT interface for initialization
 
 # ---------------------------------------------------------------------------
-# Initialization Commands (from enable_hid.py / nsw2_init_and_read.py)
-# Sent via Interface 1 (Bulk OUT) to activate HID report mode.
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # Initialization Commands (based on SDL's validated sequence for Switch 2 Pro)
 # See: libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
-# ---------------------------------------------------------------------------
+#
 # CRITICAL FIX:
 #   The old sequence had 0x10 at index 12 (rumble enable) which is WRONG.
 #   SDL uses 0x01 for rumble enablement. 0x10 was the original Switch Pro

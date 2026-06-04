@@ -81,28 +81,30 @@ class RumbleManager:
         - large_motor (0-255) -> Low  frequency amplitude
         - small_motor (0-255) -> High frequency amplitude
         """
-        # Scale 0-255 into safe amplitude range
         hf_amp = int((small_motor / 255.0) * RUMBLE_AMP_MAX)
         lf_amp = int((large_motor / 255.0) * RUMBLE_AMP_MAX)
-
-        # Clamp for safety
         hf_amp = min(hf_amp, RUMBLE_AMP_MAX)
         lf_amp = min(lf_amp, RUMBLE_AMP_MAX)
 
-        # Encode left actuator rumble data (5 bytes)
-        left_rumble = self._encode_actuator(RUMBLE_HF_FREQ, hf_amp, RUMBLE_LF_FREQ, lf_amp)
+        actuator = self._encode_actuator(RUMBLE_HF_FREQ, hf_amp, RUMBLE_LF_FREQ, lf_amp)
+        return self._build_report(actuator)
 
-        # Build 64-byte report
+    def _build_neutral_packet(self) -> bytes:
+        """Build a 64-byte neutral (no vibration) report."""
+        return self._build_report(RUMBLE_NEUTRAL_ACTUATOR)
+
+    def _build_report(self, actuator: bytes) -> bytes:
+        """Assemble the common 64-byte report layout with the given actuator data."""
         self._seq = (self._seq + 1) & 0x0F
         seq_byte = 0x50 | self._seq
 
         report = bytearray(64)
         report[0] = SWITCH2_RUMBLE_REPORT_ID   # 0x02
         report[1] = seq_byte
-        report[2:7] = left_rumble                # left actuator (5 bytes)
+        report[2:7] = actuator                   # left actuator (5 bytes)
         # bytes 7-16: padding (already 0x00)
         report[17] = seq_byte                    # sequence copy
-        report[18:23] = left_rumble            # right actuator (often same as left)
+        report[18:23] = actuator                 # right actuator (often same as left)
         # bytes 23-63: padding (already 0x00)
 
         return bytes(report)
@@ -145,25 +147,10 @@ class RumbleManager:
             else:
                 # If no new rumble command, and motors were active, send neutral
                 if not last_was_neutral:
-                    neutral = self._build_neutral_packet()
-                    self._send_packet(neutral)
+                    self._send_packet(self._build_neutral_packet())
                     last_was_neutral = True
 
             time.sleep(0.01)
-
-    def _build_neutral_packet(self) -> bytes:
-        """Build a 64-byte neutral (no vibration) report."""
-        self._seq = (self._seq + 1) & 0x0F
-        seq_byte = 0x50 | self._seq
-        neutral = RUMBLE_NEUTRAL_ACTUATOR
-
-        report = bytearray(64)
-        report[0] = SWITCH2_RUMBLE_REPORT_ID
-        report[1] = seq_byte
-        report[2:7] = neutral
-        report[17] = seq_byte
-        report[18:23] = neutral
-        return bytes(report)
 
     def _send_packet(self, packet: bytes):
         """Send the 64-byte HID Output Report via Interface 0 Interrupt OUT."""

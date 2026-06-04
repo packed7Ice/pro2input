@@ -11,7 +11,6 @@ Requires:
 """
 
 import sys
-import time
 
 from core.controller_usb import Switch2ProControllerUSB
 from core.rumble_manager import RumbleManager
@@ -40,7 +39,7 @@ def main():
         print("  3. Are drivers (libusbK) correctly installed via Zadig?")
         sys.exit(1)
 
-    print(f"[OK ] Device found.")
+    print("[OK ] Device found.")
     controller.initialize_hid_mode()
     print("[OK ] Controller initialized and HID mode enabled.")
 
@@ -51,7 +50,7 @@ def main():
     rumble.start()
     print("[OK ] Rumble manager started (experimental).")
 
-    print(f"\n[INFO] Starting input loop. Press Ctrl+C to stop.")
+    print("\n[INFO] Starting input loop. Press Ctrl+C to stop.")
     print("[INFO] Open your game and enjoy!\n")
 
     # Step 4: Input loop
