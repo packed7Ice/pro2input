@@ -44,7 +44,7 @@ class Xbox360Mapper:
         mapping = self.settings.get("button_mapping") if self.settings else None
         if mapping is None:
             mapping = {
-                "B": "A", "A": "B", "Y": "X", "X": "Y",
+                "B": "B", "A": "A", "Y": "Y", "X": "X",
                 "R": "RIGHT_SHOULDER", "ZR": "RIGHT_TRIGGER",
                 "Plus": "START", "RStick": "RIGHT_THUMB",
                 "Down": "DPAD_DOWN", "Right": "DPAD_RIGHT",

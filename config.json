@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "button_mapping": {
+    "B": "B",
+    "A": "A",
+    "Y": "Y",
+    "X": "X",
+    "R": "RIGHT_SHOULDER",
+    "ZR": "RIGHT_TRIGGER",
+    "Plus": "START",
+    "RStick": "RIGHT_THUMB",
+    "Down": "DPAD_DOWN",
+    "Right": "DPAD_RIGHT",
+    "Left": "DPAD_LEFT",
+    "Up": "DPAD_UP",
+    "L": "LEFT_SHOULDER",
+    "ZL": "LEFT_TRIGGER",
+    "Minus": "BACK",
+    "LStick": "LEFT_THUMB",
+    "Home": "GUIDE",
+    "Capture": null,
+    "CButton": null,
+    "GRButton": null
+  },
+  "stick": {
+    "left": {
+      "invert_x": false,
+      "invert_y": false
+    },
+    "right": {
+      "invert_x": false,
+      "invert_y": true
+    }
+  },
+  "trigger": {
+    "synthesize_from_buttons": true
+  },
+  "rumble": {
+    "enabled": true,
+    "strength": 1.0
+  }
+}

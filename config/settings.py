@@ -14,10 +14,10 @@ CONFIG_PATH = Path("config.json")
 DEFAULT_CONFIG = {
     "version": 1,
     "button_mapping": {
-        "B": "A",
-        "A": "B",
-        "Y": "X",
-        "X": "Y",
+        "B": "B",
+        "A": "A",
+        "Y": "Y",
+        "X": "X",
         "R": "RIGHT_SHOULDER",
         "ZR": "RIGHT_TRIGGER",
         "Plus": "START",
