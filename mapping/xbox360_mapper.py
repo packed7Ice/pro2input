@@ -45,11 +45,13 @@ class Xbox360Mapper:
         if mapping is None:
             mapping = {
                 "B": "B", "A": "A", "Y": "Y", "X": "X",
-                "R": "RIGHT_SHOULDER", "ZR": "RIGHT_TRIGGER",
+                "R": "RIGHT_SHOULDER",
+                "ZR": None,          # ZR is analog trigger, handled via synthesize_triggers
                 "Plus": "START", "RStick": "RIGHT_THUMB",
                 "Down": "DPAD_DOWN", "Right": "DPAD_RIGHT",
                 "Left": "DPAD_LEFT", "Up": "DPAD_UP",
-                "L": "LEFT_SHOULDER", "ZL": "LEFT_TRIGGER",
+                "L": "LEFT_SHOULDER",
+                "ZL": None,          # ZL is analog trigger, handled via synthesize_triggers
                 "Minus": "BACK", "LStick": "LEFT_THUMB",
                 "Home": "GUIDE",
             }

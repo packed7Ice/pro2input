@@ -13,8 +13,8 @@ XBOX_BUTTON_CODES = {
     "Y": vg.XUSB_BUTTON.XUSB_GAMEPAD_Y,
     "LEFT_SHOULDER": vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,
     "RIGHT_SHOULDER": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
-    "LEFT_TRIGGER": vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,  # digital only
-    "RIGHT_TRIGGER": vg.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,  # digital only
+    # NOTE: Xbox 360 triggers (LT/RT) are analog axes, not digital buttons.
+    # They are handled via left_trigger()/right_trigger(), not button press.
     "BACK": vg.XUSB_BUTTON.XUSB_GAMEPAD_BACK,
     "START": vg.XUSB_BUTTON.XUSB_GAMEPAD_START,
     "GUIDE": vg.XUSB_BUTTON.XUSB_GAMEPAD_GUIDE,

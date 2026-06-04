@@ -19,7 +19,7 @@ DEFAULT_CONFIG = {
         "Y": "Y",
         "X": "X",
         "R": "RIGHT_SHOULDER",
-        "ZR": "RIGHT_TRIGGER",
+        "ZR": None,          # ZR is analog trigger, handled separately
         "Plus": "START",
         "RStick": "RIGHT_THUMB",
         "Down": "DPAD_DOWN",
@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
         "Left": "DPAD_LEFT",
         "Up": "DPAD_UP",
         "L": "LEFT_SHOULDER",
-        "ZL": "LEFT_TRIGGER",
+        "ZL": None,          # ZL is analog trigger, handled separately
         "Minus": "BACK",
         "LStick": "LEFT_THUMB",
         "Home": "GUIDE",
