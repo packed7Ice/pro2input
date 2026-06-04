@@ -52,7 +52,8 @@ def open_device(path):
         0x00000001 | 0x00000002,
         None, 3, 0, None
     )
-    if handle == ctypes.c_void_p(-1).value:
+    # INVALID_HANDLE_VALUE can be tricky with ctypes. Check both -1 and 0.
+    if handle == -1 or handle == ctypes.c_void_p(-1).value or handle == 0:
         return None
     return handle
 
@@ -104,7 +105,8 @@ def test_path(path, label):
 
     # Initialize libusbK
     usb_handle = ctypes.c_void_p()
-    if not libusbK.UsbK_Init(handle, ctypes.byref(usb_handle)):
+    ret = libusbK.UsbK_Init(handle, ctypes.byref(usb_handle))
+    if not ret:
         err = kernel32.GetLastError()
         print(f"[NG ] UsbK_Init failed. Error: {err}")
         kernel32.CloseHandle(handle)
