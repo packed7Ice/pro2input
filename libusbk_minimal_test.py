@@ -12,10 +12,27 @@ kernel32 = ctypes.windll.kernel32
 
 # Load libusbK
 try:
+    # Try WinDLL first (stdcall)
     libusbK = ctypes.windll.libusbK
+    print("[INFO] Loaded libusbK.dll via WinDLL (stdcall)")
 except OSError:
-    print("[FATAL] libusbK.dll not found.")
-    sys.exit(1)
+    try:
+        # Try CDLL (cdecl)
+        libusbK = ctypes.CDLL("libusbK.dll")
+        print("[INFO] Loaded libusbK.dll via CDLL (cdecl)")
+    except OSError:
+        print("[FATAL] libusbK.dll not found.")
+        sys.exit(1)
+
+# Set function prototypes for UsbK_Init
+# UsbK_Init might take 2 or 3 arguments
+libusbK.UsbK_Init.restype = wintypes.BOOL
+
+# Test with 2 args: (PKUSB_HANDLE, HANDLE)
+libusbK.UsbK_Init.argtypes = [
+    ctypes.POINTER(ctypes.c_void_p),  # PKUSB_HANDLE
+    wintypes.HANDLE                    # HANDLE
+]
 
 # Device path (the one that CreateFile succeeded for)
 DEVICE_PATH = r"\\?\usb#vid_057e&pid_2069#00#{a5dcbf10-6530-11d2-901f-00c04fb951ed}"

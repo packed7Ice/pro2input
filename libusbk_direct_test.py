@@ -104,11 +104,34 @@ def test_path(path, label):
     print(f"[OK ] Handle opened: {handle}")
 
     # Initialize libusbK
-    usb_handle = ctypes.c_void_p()
-    ret = libusbK.UsbK_Init(handle, ctypes.byref(usb_handle))
-    if not ret:
-        err = kernel32.GetLastError()
-        print(f"[NG ] UsbK_Init failed. Error: {err}")
+    # The KUSB_HANDLE might be a pointer to a struct, not just void*.
+    # Try allocating a struct and passing its address.
+    class KUSB_HANDLE_STRUCT(ctypes.Structure):
+        _fields_ = [("dummy", ctypes.c_byte * 64)]
+    
+    usb_handle_struct = KUSB_HANDLE_STRUCT()
+    usb_handle = ctypes.pointer(usb_handle_struct)
+    
+    # Try the documented signature: UsbK_Init(HANDLE, PKUSB_HANDLE)
+    try:
+        ret = libusbK.UsbK_Init(handle, ctypes.byref(usb_handle))
+        if not ret:
+            err = kernel32.GetLastError()
+            print(f"[WARN] UsbK_Init (std signature) failed. Error: {err}")
+            # Try with just the pointer to the struct
+            try:
+                ret = libusbK.UsbK_Init(handle, ctypes.byref(usb_handle_struct))
+                if not ret:
+                    err = kernel32.GetLastError()
+                    print(f"[WARN] UsbK_Init (struct ptr) failed. Error: {err}")
+                    kernel32.CloseHandle(handle)
+                    return False
+            except Exception as e:
+                print(f"[WARN] UsbK_Init (struct ptr) crashed: {e}")
+                kernel32.CloseHandle(handle)
+                return False
+    except Exception as e:
+        print(f"[WARN] UsbK_Init (std) crashed: {e}")
         kernel32.CloseHandle(handle)
         return False
 
