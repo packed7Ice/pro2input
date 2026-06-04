@@ -103,31 +103,53 @@ def main():
     except usb.core.USBError:
         pass
     
-    # Capture baseline
-    print("[CAPTURE] Capturing baseline (idle state)...")
+    # Capture baseline - take multiple samples to account for IMU drift
+    print("[CAPTURE] Capturing baseline samples...")
     print("          Please do NOT touch the controller for 2 seconds.\n")
     
-    baseline = None
+    baseline_samples = []
     start_time = time.time()
     while time.time() - start_time < 2.0:
         try:
             data = dev.read(ep0_in.bEndpointAddress, 64, timeout=100)
             if data:
-                baseline = list(data)
+                baseline_samples.append(list(data))
         except usb.core.USBError:
             pass
     
-    if baseline is None:
-        print("[FATAL] Could not capture baseline.")
+    if len(baseline_samples) < 3:
+        print("[FATAL] Could not capture enough baseline samples.")
         sys.exit(1)
     
-    print("[OK ] Baseline captured:\n")
-    hex_str = " ".join(f"{b:02X}" for b in baseline)
-    print(f"BASE: {hex_str}\n")
+    # Use the last sample as baseline (stabilized)
+    baseline = baseline_samples[-1]
+    
+    print("[OK ] Baseline captured.\n")
+    print("Baseline samples:")
+    for i, sample in enumerate(baseline_samples[-3:]):
+        hex_str = " ".join(f"{b:02X}" for b in sample)
+        print(f"  Sample {i+1}: {hex_str}")
+    print()
+    
+    # Identify stable vs changing bytes
+    print("[ANALYSIS] Identifying byte stability...")
+    stable_bytes = []
+    changing_bytes = []
+    for byte_idx in range(64):
+        values = set(s[byte_idx] for s in baseline_samples)
+        if len(values) == 1:
+            stable_bytes.append(byte_idx)
+        else:
+            changing_bytes.append(byte_idx)
+    
+    print(f"  Stable bytes (likely buttons): {stable_bytes}")
+    print(f"  Changing bytes (likely IMU/sticks): {changing_bytes}")
+    print()
     
     print("=" * 80)
     print("[LIVE] Now press buttons or move sticks!")
     print("       Changed bytes will be highlighted.")
+    print("       Note: IMU/stick bytes will change even without input.")
     print("=" * 80)
     
     try:
@@ -147,16 +169,17 @@ def main():
                     
                     hex_str = " ".join(output_parts)
                     
-                    # Show changed bytes summary
+                    # Show changed bytes summary (only for stable/interesting bytes)
                     changed = [f"Byte{i}={current[i]:02X}(was {baseline[i]:02X})" 
                                for i in range(min(len(current), len(baseline))) 
-                               if current[i] != baseline[i]]
+                               if current[i] != baseline[i] and i in stable_bytes]
                     
                     if changed:
-                        print(f"RECV: {hex_str}")
-                        print(f"      Changes: {', '.join(changed)}")
+                        print(f"\nRECV: {hex_str}")
+                        print(f"      BUTTON CHANGES: {', '.join(changed)}")
                     else:
-                        print(f"RECV: {hex_str} (no change)")
+                        # Only print every 30 frames to avoid spam
+                        pass
             except usb.core.USBError:
                 pass
     except KeyboardInterrupt:
