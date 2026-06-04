@@ -239,15 +239,18 @@ def main():
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT) if buttons['Left'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT)
                     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT) if buttons['Right'] else gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT)
                     
-                    # Left stick (Y-axis inverted for Xbox)
+                    # Left stick (Y-axis inverted: Switch UP is negative, Xbox UP is positive)
                     gamepad.left_joystick(x_value=lx, y_value=-ly)
                     
-                    # Right stick (Y-axis inverted for Xbox)
+                    # Right stick (Y-axis inverted)
                     gamepad.right_joystick(x_value=rx, y_value=-ry)
                     
                     # Triggers (analog)
                     gamepad.left_trigger(value=lt)
                     gamepad.right_trigger(value=rt)
+                    
+                    # Debug: print trigger values periodically
+                    # print(f"LT={lt:3d} RT={rt:3d} | LX={lx:6d} LY={ly:6d} | RX={rx:6d} RY={ry:6d}")
                     
                     # Update
                     gamepad.update()
