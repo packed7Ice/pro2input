@@ -107,12 +107,15 @@ RUMBLE_NEUTRAL_ACTUATOR = bytes([0x87, 0x01, 0x20, 0x11, 0x00])
 
 # Packet layout (64 bytes total):
 #   [0]       = Report ID (0x02)
-#   [1]       = 0x50 | (seq & 0x0F)
+#   [1]       = 0x50 | (seq & 0x0F)           ← sequence byte
 #   [2-6]     = Left actuator rumble data (5 bytes)
 #   [7-16]    = Padding (0x00)
-#   [17]      = 0x50 | (seq & 0x0F)  (sequence copy)
-#   [18-22]   = Right actuator rumble data (5 bytes, often copy of left)
+#   [17]      = 0x50 | (seq & 0x0F)           ← seq copy  (SDL: 0x11 = 17 decimal)
+#   [18-22]   = Right actuator (copy of left, 5 bytes)  (SDL: 0x12..0x16)
 #   [23-63]   = Padding (0x00)
+#
+# SDL source: memcpy(&rumble_data[0x11], &rumble_data[0x01], 6)
+#   → report[17:23] = report[1:7]
 
 # SDL default frequencies
 RUMBLE_HF_FREQ = 0x0187  # ~600 Hz high-frequency default
