@@ -2,7 +2,7 @@
 core/rumble_manager.py
 
 Converts Xbox 360 force-feedback (large_motor, small_motor) into
-Switch 2 Pro Controller HD Rumble packets and sends them via HID Output Report.
+Switch 2 Pro Controller HD Rumble 2 packets and sends them via HID Output Report.
 
 Based on SDL's official implementation:
   libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c

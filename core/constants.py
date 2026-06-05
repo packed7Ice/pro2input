@@ -62,7 +62,7 @@ TRIGGER_DIGITAL_OFF = 0
 # - Report ID for rumble output: 0x02
 # - Packet size: exactly 64 bytes (HID Output Report)
 # - Sent via Interface 0 (HID), NOT Interface 1 (Bulk OUT).
-# - Each actuator uses 5 bytes of HD Rumble data (different bit packing).
+# - Each actuator uses 5 bytes of HD Rumble 2 data (different bit packing).
 # ---------------------------------------------------------------------------
 
 # Report ID for Switch 2 Pro rumble output report

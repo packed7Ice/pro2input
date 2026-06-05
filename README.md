@@ -19,7 +19,7 @@ A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller*
 - **Full Button Mapping** — Face buttons, shoulder buttons, D-Pad, system buttons
 - **Analog Stick Support** — Both left and right sticks with correct axis polarity
 - **Trigger Synthesis** — ZL/ZR digital buttons mapped to analog LT/RT triggers
-- **HD Rumble Feedback** — Experimental force-feedback support via SDL-derived protocol
+- **HD Rumble 2 Feedback** — Experimental force-feedback support via SDL-derived protocol
 - **Modular Architecture** — Clean separation of USB transport, input parsing, and mapping layers
 
 ### Requirements
@@ -149,7 +149,7 @@ See [LICENSE](LICENSE) for details.
 - **フルボタンマッピング** — フェイスボタン、ショルダーボタン、十字キー、システムボタン
 - **アナログスティック対応** — 左右スティックともに正しい軸方向で動作
 - **トリガー合成** — ZL/ZR のデジタルボタンをアナログ LT/RT トリガーに変換
-- **HD 振動フィードバック** — SDL 導出プロトコルによる実験的な振動対応
+- **HD 振動2 フィードバック** — SDL 導出プロトコルによる実験的な HD 振動2 対応
 - **モジュール化アーキテクチャ** — USB 通信、入力解析、マッピングを明確に分離
 
 ### 必要条件
@@ -158,7 +158,7 @@ See [LICENSE](LICENSE) for details.
 - Python 3.10 以降
 - Nintendo Switch 2 Pro コントローラー（USB 接続）
 - [ViGEmBus ドライバー](https://github.com/nefarius/ViGEmBus)（仮想 Xbox 360 コントローラー用）
-- [libusb-1.0.dll](https://libusb.info/)（`C:\Windows\System32` に配置）
+- [libusb-1.0.dll](https://libusb.info/)（`C:\\Windows\\System32` に配置）
 - [Zadig](https://zadig.akeo.ie/)（Interface 1 用 libusbK ドライバーインストール）
 
 ### インストール

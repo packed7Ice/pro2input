@@ -2,7 +2,7 @@
 main.py
 
 Switch 2 Pro Controller -> Xbox 360 Input Converter
-Entry point.  Combines USB input reading, XInput mapping, and HD Rumble feedback.
+Entry point.  Combines USB input reading, XInput mapping, and HD Rumble 2 feedback.
 
 Requires:
     pip install pyusb vgamepad
@@ -24,7 +24,7 @@ def main():
 
     print("=" * 80)
     print(" Switch 2 Pro Controller -> Xbox 360 Input Converter")
-    print(" With experimental HD Rumble feedback")
+    print(" With experimental HD Rumble 2 feedback")
     print("=" * 80)
 
     # Step 1: Create virtual Xbox 360 controller
