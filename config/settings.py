@@ -56,6 +56,15 @@ DEFAULT_CONFIG = {
         "timeout_ms": 300,
         "hold_ms": 150,
     },
+    # Keyboard combos for buttons not mapped to Xbox 360.
+    # Format: "ctrl+s", "win+alt+prtsc", "f12", or null to disable.
+    # Available buttons: Capture, CButton, GRButton, GLButton
+    "keyboard_mapping": {
+        "Capture": "win+alt+prtsc",  # Xbox Game Bar screenshot
+        "CButton": None,
+        "GRButton": None,
+        "GLButton": None,
+    },
 }
 
 

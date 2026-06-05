@@ -10,6 +10,7 @@ Supports configurable button remapping, stick inversion, and trigger synthesis.
 import vgamepad as vg
 
 from core.input_parser import parse_buttons, parse_sticks, synthesize_triggers
+from core.keyboard_mapper import KeyboardMapper
 from mapping.xbox360_codes import XBOX_BUTTON_CODES
 
 
@@ -19,6 +20,7 @@ class Xbox360Mapper:
     def __init__(self, settings=None):
         self.gamepad = vg.VX360Gamepad()
         self.settings = settings
+        self._keyboard = KeyboardMapper()
 
     def update_from_payload(self, payload: list):
         """Parse a Switch input payload and update the virtual Xbox 360 state."""
@@ -76,6 +78,11 @@ class Xbox360Mapper:
 
         # Push state to OS
         self.gamepad.update()
+
+        # Keyboard combos for buttons not mapped to Xbox 360
+        kb_mapping = self.settings.get("keyboard_mapping") if self.settings else {}
+        if kb_mapping:
+            self._keyboard.update(buttons, kb_mapping)
 
     def _set_button(self, button_code, pressed: bool):
         if pressed:

@@ -48,5 +48,11 @@
     "surface_scale": 1.0,
     "timeout_ms": 300,
     "hold_ms": 150
+  },
+  "keyboard_mapping": {
+    "Capture": "win+alt+prtsc",
+    "CButton": null,
+    "GRButton": null,
+    "GLButton": null
   }
 }

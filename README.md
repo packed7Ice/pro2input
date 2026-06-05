@@ -38,7 +38,7 @@ A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller*
 ```bash
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-pip install pyusb vgamepad
+pip install pyusb vgamepad pynput
 ```
 
 ### Driver Setup (Zadig) — Critical
@@ -111,6 +111,12 @@ python tools/fh6_udp_debug.py
     "surface_scale": 1.0,
     "timeout_ms": 300,
     "hold_ms": 150
+  },
+  "keyboard_mapping": {
+    "Capture": "win+alt+prtsc",
+    "CButton": null,
+    "GRButton": null,
+    "GLButton": null
   }
 }
 ```
@@ -124,6 +130,37 @@ python tools/fh6_udp_debug.py
 | `fh6_udp.surface_scale` | Road surface -> low-frequency motor scale |
 | `fh6_udp.timeout_ms` | Silence motors if no UDP packet for this long |
 | `fh6_udp.hold_ms` | Sustain rumble for this long after value drops to zero |
+
+### Keyboard Mapping for Unmapped Buttons
+
+The following Switch 2 Pro buttons have no Xbox 360 equivalent and can be mapped to any keyboard key or shortcut:
+
+| Button | Description | Default |
+|--------|-------------|---------|
+| `Capture` | Screenshot button | `win+alt+prtsc` (Xbox Game Bar screenshot) |
+| `CButton` | Game chat button | `null` (disabled) |
+| `GRButton` | Right back grip button | `null` (disabled) |
+| `GLButton` | Left back grip button | `null` (disabled) |
+
+Edit `keyboard_mapping` in `config.json` to assign any combo:
+
+```json
+"keyboard_mapping": {
+  "Capture": "win+alt+prtsc",
+  "CButton": "win+g",
+  "GRButton": "f12",
+  "GLButton": "ctrl+shift+s"
+}
+```
+
+Supported modifiers: `ctrl`, `shift`, `alt`, `win`
+
+Supported special keys: `f1`-`f15`, `prtsc`, `esc`, `tab`, `enter`, `backspace`, `delete`, `home`, `end`, `pgup`, `pgdn`, `space`, `up`, `down`, `left`, `right`, and any single character.
+
+Requires `pynput`:
+```bash
+pip install pynput
+```
 
 ### Project Structure
 
@@ -139,7 +176,8 @@ pro2input/
 │   ├── controller_usb.py        # pyusb I/O: input thread + rumble via ep 0x01
 │   ├── input_parser.py          # Button/stick/trigger parsing
 │   ├── rumble_manager.py        # Rumble state, 12ms periodic send, EncodeHDRumble
-│   └── rumble_udp_listener.py   # FH6 UDP telemetry -> rumble values
+│   ├── rumble_udp_listener.py   # FH6 UDP telemetry -> rumble values
+│   └── keyboard_mapper.py       # Unmapped buttons -> keyboard combos (pynput)
 ├── mapping/
 │   └── xbox360_mapper.py        # Virtual Xbox 360 gamepad
 ├── config/
@@ -235,7 +273,7 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ```bash
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-pip install pyusb vgamepad
+pip install pyusb vgamepad pynput
 ```
 
 ### ドライバー設定（Zadig）— 重要
@@ -308,6 +346,12 @@ python tools/fh6_udp_debug.py
     "surface_scale": 1.0,
     "timeout_ms": 300,
     "hold_ms": 150
+  },
+  "keyboard_mapping": {
+    "Capture": "win+alt+prtsc",
+    "CButton": null,
+    "GRButton": null,
+    "GLButton": null
   }
 }
 ```
@@ -321,6 +365,37 @@ python tools/fh6_udp_debug.py
 | `fh6_udp.surface_scale` | 路面振動 -> 低周波モーターのスケール |
 | `fh6_udp.timeout_ms` | この時間（ms）UDP が来なければモーターを停止 |
 | `fh6_udp.hold_ms` | 振動値がゼロになってもこの時間（ms）は振動を持続 |
+
+### Xbox 360 に存在しないボタンのキーボードマッピング
+
+以下の Switch 2 Pro ボタンは Xbox 360 に相当するボタンがなく、任意のキーボードショートカットに割り当てられます：
+
+| ボタン | 説明 | デフォルト |
+|--------|------|-----------|
+| `Capture` | スクリーンショットボタン | `win+alt+prtsc`（Xbox ゲームバー スクリーンショット） |
+| `CButton` | ゲームチャットボタン | `null`（無効） |
+| `GRButton` | 右背面ボタン | `null`（無効） |
+| `GLButton` | 左背面ボタン | `null`（無効） |
+
+`config.json` の `keyboard_mapping` を編集して任意のキーコンボを設定できます：
+
+```json
+"keyboard_mapping": {
+  "Capture": "win+alt+prtsc",
+  "CButton": "win+g",
+  "GRButton": "f12",
+  "GLButton": "ctrl+shift+s"
+}
+```
+
+対応するモディファイア: `ctrl`、`shift`、`alt`、`win`
+
+対応する特殊キー: `f1`〜`f15`、`prtsc`、`esc`、`tab`、`enter`、`backspace`、`delete`、`home`、`end`、`pgup`、`pgdn`、`space`、`up`、`down`、`left`、`right`、および任意の1文字キー。
+
+キーボードマッピングを使用するには `pynput` が必要です：
+```bash
+pip install pynput
+```
 
 ### プロジェクト構成
 
@@ -336,7 +411,8 @@ pro2input/
 │   ├── controller_usb.py        # pyusb I/O: 入力スレッド + ep 0x01 振動送信
 │   ├── input_parser.py          # ボタン・スティック・トリガー解析
 │   ├── rumble_manager.py        # 振動状態管理・12ms 周期送信・EncodeHDRumble
-│   └── rumble_udp_listener.py   # FH6 UDP テレメトリ -> 振動値変換
+│   ├── rumble_udp_listener.py   # FH6 UDP テレメトリ -> 振動値変換
+│   └── keyboard_mapper.py       # 未割り当てボタン -> キーボード入力（pynput）
 ├── mapping/
 │   └── xbox360_mapper.py        # 仮想 Xbox 360 ゲームパッド
 ├── config/

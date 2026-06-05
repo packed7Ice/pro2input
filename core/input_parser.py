@@ -70,8 +70,9 @@ def parse_buttons(payload: list) -> dict[str, bool]:
         'L': bool(payload[6] & 0x40),
         'ZL': bool(payload[6] & 0x80),
 
-        # data[8] (payload[7]) - Extra buttons
-        'GRButton': bool(payload[7] & 0x01),
+        # data[8] (payload[7]) - Extra buttons (back grip buttons)
+        'GRButton': bool(payload[7] & 0x01),  # right back button
+        'GLButton': bool(payload[7] & 0x02),  # left back button
     }
 
 
