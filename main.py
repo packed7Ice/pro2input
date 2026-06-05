@@ -11,14 +11,22 @@ Requires:
 """
 
 import sys
+import argparse
 
 from core.controller_usb import Switch2ProControllerUSB
 from core.rumble_manager import RumbleManager
+from core.rumble_udp_listener import FH6RumbleUDPListener
 from mapping.xbox360_mapper import Xbox360Mapper
 from config.settings import Settings
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Switch 2 Pro Controller -> Xbox 360 Input Converter"
+    )
+    parser.add_argument("--no-udp", action="store_true", help="Disable FH6 UDP telemetry rumble")
+    args = parser.parse_args()
+
     # Load user settings
     settings = Settings()
 
@@ -60,6 +68,38 @@ def main():
         print("\n[INFO] Rumble is disabled in config.")
         rumble = None
 
+    # Step 3b: Setup FH6 UDP telemetry listener
+    udp_listener = None
+    if rumble_enabled and rumble is not None and not args.no_udp:
+        udp_enabled = settings.get("fh6_udp.enabled", True)
+        if udp_enabled:
+            udp_port = settings.get("fh6_udp.port", 5301)
+            udp_strength = settings.get("fh6_udp.strength", 1.0)
+            udp_threshold = settings.get("fh6_udp.smashable_threshold", 3.0)
+            udp_slip = settings.get("fh6_udp.slip_scale", 0.8)
+            udp_surface = settings.get("fh6_udp.surface_scale", 1.0)
+            udp_timeout = settings.get("fh6_udp.timeout_ms", 300)
+            print(f"\n[INFO] Starting FH6 UDP telemetry listener on port {udp_port}...")
+            try:
+                udp_listener = FH6RumbleUDPListener(
+                    rumble,
+                    port=udp_port,
+                    strength=udp_strength,
+                    smashable_threshold=udp_threshold,
+                    slip_scale=udp_slip,
+                    surface_scale=udp_surface,
+                    timeout_ms=udp_timeout,
+                )
+                udp_listener.start()
+                print("[OK ] FH6 UDP listener started.")
+            except OSError as exc:
+                print(f"[WARN] Could not start UDP listener: {exc}")
+                udp_listener = None
+        else:
+            print("\n[INFO] FH6 UDP telemetry is disabled in config.")
+    elif args.no_udp:
+        print("\n[INFO] FH6 UDP telemetry disabled by --no-udp flag.")
+
     print("\n[INFO] Starting input loop. Press Ctrl+C to stop.")
     print("[INFO] Open your game and enjoy!\n")
 
@@ -76,11 +116,16 @@ def main():
     finally:
         # Cleanup
         print("\n[INFO] Cleaning up...")
-        if rumble:
-            rumble.stop()
-        controller.cleanup()
-        mapper.reset()
-        print("[OK ] Virtual controller reset.")
+        try:
+            if udp_listener:
+                udp_listener.stop()
+            if rumble:
+                rumble.stop()
+            controller.cleanup()
+            mapper.reset()
+            print("[OK ] Virtual controller reset.")
+        except KeyboardInterrupt:
+            print("\n[INFO] Interrupted during cleanup, forcing exit.")
         print("Done.")
 
 

@@ -46,6 +46,15 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "strength": 1.0,
     },
+    "fh6_udp": {
+        "enabled": True,
+        "port": 5301,
+        "strength": 1.0,
+        "smashable_threshold": 3.0,
+        "slip_scale": 0.8,
+        "surface_scale": 1.0,
+        "timeout_ms": 300,
+    },
 }
 
 
