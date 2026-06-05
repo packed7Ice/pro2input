@@ -14,7 +14,7 @@ Key differences from original Switch Pro Controller:
   - Actuator encoding: 5 bytes each with different bit packing
 """
 
-import time
+import queue
 import threading
 
 from core.constants import (
@@ -32,7 +32,8 @@ class RumbleManager:
 
     - Receives (large_motor, small_motor) values from vgamepad callbacks
       or from the UDP telemetry listener.
-    - Keeps only the latest command; background sender sends it at ~200 Hz.
+    - Queues packets; the caller (main.py input loop) is responsible for
+      calling drain_and_send() on the main thread to avoid USB contention.
     - Sends neutral packets when no command is pending to silence motors.
     """
 
@@ -40,16 +41,10 @@ class RumbleManager:
         self.usb = usb_controller
         self._strength = max(0.0, min(strength, 2.0))
         self._lock = threading.Lock()
-        self._sender_thread: threading.Thread | None = None
-        self._running = False
         self._seq = 0
+        self._queue: queue.Queue[bytes] = queue.Queue()
 
-        # Latest pending command (set by callers, consumed by sender thread)
-        self._pending = False
-        self._pending_large = 0
-        self._pending_small = 0
-
-        # Last actually-sent values (for duplicate suppression and neutral logic)
+        # Track last sent values to avoid duplicate writes
         self._last_sent_large = 0
         self._last_sent_small = 0
 
@@ -57,29 +52,49 @@ class RumbleManager:
         self.ignore_xinput = False
 
     def start(self):
-        """Start the background sender thread."""
-        self._running = True
-        self._sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
-        self._sender_thread.start()
+        """No-op: USB writes are driven by the caller's main loop."""
+        pass
 
     def stop(self):
-        """Stop the sender thread."""
-        self._running = False
-        if self._sender_thread and self._sender_thread.is_alive():
-            self._sender_thread.join(timeout=1.0)
+        """Silence motors on shutdown."""
+        self._send_packet(self._build_neutral_packet())
+
+    def drain_and_send(self):
+        """
+        Must be called periodically (e.g. inside the main input loop).
+        Drains the queue and sends the latest packet.  Also sends a
+        neutral packet if no new command arrived and motors are active.
+        """
+        # Gather the latest queued value
+        latest_packet = None
+        while not self._queue.empty():
+            try:
+                latest_packet = self._queue.get_nowait()
+            except queue.Empty:
+                break
+
+        if latest_packet is not None:
+            self._send_packet(latest_packet)
+        else:
+            # No new command: silence if motors are still active
+            if self._last_sent_large != 0 or self._last_sent_small != 0:
+                self._send_packet(self._build_neutral_packet())
+                self._last_sent_large = 0
+                self._last_sent_small = 0
 
     def send_rumble(self, large_motor: int, small_motor: int):
         """
-        Public API to send a rumble command directly (e.g. from UDP listener).
+        Public API to queue a rumble command.
         Values are 0-255 per XInput convention.
-        Only the latest call is kept; older values are overwritten.
+        Only the latest queued command per drain_and_send() call is sent.
         """
         large_motor = max(0, min(255, int(large_motor)))
         small_motor = max(0, min(255, int(small_motor)))
-        with self._lock:
-            self._pending_large = large_motor
-            self._pending_small = small_motor
-            self._pending = True
+        if large_motor != self._last_sent_large or small_motor != self._last_sent_small:
+            packet = self._build_rumble_packet(large_motor, small_motor)
+            self._queue.put_nowait(packet)
+            self._last_sent_large = large_motor
+            self._last_sent_small = small_motor
 
     def on_xinput_rumble(self, client, target, large_motor, small_motor, led_number, user_data):
         """
@@ -143,38 +158,6 @@ class RumbleManager:
         data[3] = (low_amp & 0xC0) | ((low_freq >> 4) & 0x3F)
         data[4] = (low_amp >> 8) & 0xFF
         return bytes(data)
-
-    def _sender_loop(self):
-        """
-        Background thread: polls the latest pending command and sends it.
-        Falls back to neutral packets when nothing is pending.
-        Runs at ~100 Hz.
-        """
-        while self._running:
-            with self._lock:
-                has_pending = self._pending
-                if has_pending:
-                    large = self._pending_large
-                    small = self._pending_small
-                    self._pending = False
-                else:
-                    large = 0
-                    small = 0
-
-            if has_pending:
-                if large != self._last_sent_large or small != self._last_sent_small:
-                    packet = self._build_rumble_packet(large, small)
-                    self._send_packet(packet)
-                    self._last_sent_large = large
-                    self._last_sent_small = small
-            else:
-                # No new command: if motors are still active, send neutral
-                if self._last_sent_large != 0 or self._last_sent_small != 0:
-                    self._send_packet(self._build_neutral_packet())
-                    self._last_sent_large = 0
-                    self._last_sent_small = 0
-
-            time.sleep(0.01)
 
     def _send_packet(self, packet: bytes):
         """Send the 64-byte HID Output Report via Interface 0 Interrupt OUT."""

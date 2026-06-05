@@ -111,6 +111,8 @@ def main():
             payload = controller.read_input(timeout=1000)
             if payload is not None:
                 mapper.update_from_payload(payload)
+            if rumble:
+                rumble.drain_and_send()
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user.")
     except Exception as e:
