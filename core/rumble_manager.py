@@ -83,6 +83,8 @@ class RumbleManager:
         Callback signature for vgamepad.VX360Gamepad.register_notification().
         Receives force-feedback events from the game/OS.
         """
+        if large_motor != 0 or small_motor != 0:
+            print(f"[XInput] Rumble event: large={large_motor}, small={small_motor}")
         self.send_rumble(large_motor, small_motor)
 
     def _build_rumble_packet(self, large_motor: int, small_motor: int) -> bytes:
@@ -143,7 +145,7 @@ class RumbleManager:
         """
         Background thread: polls the latest pending command and sends it.
         Falls back to neutral packets when nothing is pending.
-        Runs at ~200 Hz to keep up with high-frequency UDP telemetry.
+        Runs at ~100 Hz.
         """
         while self._running:
             with self._lock:
@@ -169,8 +171,13 @@ class RumbleManager:
                     self._last_sent_large = 0
                     self._last_sent_small = 0
 
-            time.sleep(0.005)
+            time.sleep(0.01)
 
     def _send_packet(self, packet: bytes):
         """Send the 64-byte HID Output Report via Interface 0 Interrupt OUT."""
-        self.usb.write_output_report(packet)
+        try:
+            ok = self.usb.write_output_report(packet)
+            if not ok:
+                print("[Rumble] HID write_output_report returned False")
+        except Exception as exc:
+            print(f"[Rumble] HID write failed: {exc}")
