@@ -1,179 +1,248 @@
-# pro2input: FH6 UDP テレメトリ振動対応 — コーディングコンテキスト
+# pro2input: 現状の問題と実装コンテキスト
 
-## 目的
+## 現在の状態（2026-06-06 時点）
 
-`core/rumble_udp_listener.py` を新規作成し、`main.py` に組み込む。
-FH6 の Data Out（UDP テレメトリ）を受信して `rumble_manager.py` の既存 API を呼び出す。
+| 項目 | 状態 |
+|------|------|
+| UDP 受信（FH6 Data Out） | ✅ 正常受信中 |
+| ランブル値計算（UDP → large/small 変換） | ✅ 正常 |
+| Bulk OUT 書き込み | ✅ エラーなし（pywinusb 排除後） |
+| **コントローラー振動** | ❌ **未解決** |
+| **入力遅延** | ⚠️ **起動後数分で再発** |
 
 ---
 
-## リポジトリ
-
-`https://github.com/packed7Ice/pro2input`
+## リポジトリ構造（確認済み）
 
 ```
 pro2input/
+├── config.json              # ルートに存在 → UDP ポートをここに追加
 ├── main.py                  # エントリーポイント（要編集）
+├── start.bat / settings.bat
+├── config/                  # 詳細未確認
 ├── core/
-│   ├── constants.py
-│   ├── controller_usb.py
-│   ├── input_parser.py
-│   └── rumble_manager.py    # 既存の振動送信モジュール（要調査）
+│   ├── constants.py         # デバイスID・初期化コマンド・振動定数
+│   ├── controller_usb.py    # USB接続とHID I/O
+│   ├── input_parser.py      # ボタン・スティック・トリガー解析
+│   └── rumble_manager.py    # XInput → Switch 2 Pro 振動変換
 ├── mapping/
 │   └── xbox360_mapper.py
-└── tools/
-    └── fh6_rumble_debug.py  # 既存デバッグツール（参考）
+├── tools/
+│   ├── fh6_rumble_debug.py
+│   ├── xinput_rumble_test.py
+│   └── rumble_hid_control_test.py
+└── ui/                      # 詳細未確認
 ```
 
-作業前に `rumble_manager.py` の公開 API（関数名・引数・型）を必ず確認すること。
+---
+
+## 問題A：振動しない
+
+### 根本原因の仮説（優先度順）
+
+**仮説1: init_sequence に必須コマンドが欠落している**
+
+SDL（`SDL_hidapi_switch2.c`）の init_sequence を確認済み。以下の順序が必須：
+
+```
+① ReadFlashBlock × 5（アドレス順）
+   0x13000  → シリアル番号
+   0x13040  → ジャイロバイアス
+   0x13080  → 左スティックキャリブレーション
+   0x130C0  → 右スティックキャリブレーション
+   0x13100  → 加速度センサーバイアス
+
+② init_sequence（各コマンド送信後に必ず RecvBulkData でACK受信）
+   [0x07, 0x91, 0x00, 0x01, ...]          # 不明
+   [0x0c, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]  # feature output bitmask set
+   [0x11, 0x91, 0x00, 0x01, ...]          # 不明
+   [0x0a, 0x91, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00,   # ★ Set rumble data
+    0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0x35, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00]
+   [0x0c, 0x91, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]  # feature output bits enable
+   [0x01, 0x91, 0x00, 0x0c, ...]          # 不明
+   [0x01, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]   # ★ Enable rumble
+   [0x08, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]  # charging grip
+   [0x03, 0x91, 0x00, 0x0a, 0x00, 0x04, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00]  # set report format
+   [0x03, 0x91, 0x00, 0x0d, 0x00, 0x08, 0x00, 0x00,   # ★ Start output
+    0x01, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+```
+
+SDL のパケット長の計算規則: `init_sequence[i][5] + 8` バイトを送信
+（例: `0x0a` コマンドは `data[5]=0x14=20` → 送信長 28 バイト）
+
+**確認箇所**: `core/constants.py` の init_sequence と上記を1バイト単位で比較すること。
+特に `ReadFlashBlock` の有無と `0x0a`（Set rumble data）・`0x01`（Enable rumble）の存在を確認。
 
 ---
 
-## 背景（要約）
+**仮説2: rumble パケットのシーケンス番号が更新されていない**
 
-- pro2input は Switch 2 Pro コントローラーを ViGEmBus 仮想 Xbox 360 として PC に認識させる Python ツール
-- FH6（Game Pass 版）は ViGEmBus 仮想デバイスに振動データを送信しない（GameInput API の制限）
-- FH6 には公式の UDP テレメトリ出力（Data Out）機能があり、ローカル送信（127.0.0.1）に対応している
-- この UDP パケットには路面振動値・スリップ値・衝突値が含まれており、これを振動の入力源として使う
+SDL では `rumble_seq` を毎回インクリメント（0x0〜0xF でローテーション）しており、
+シーケンス番号が変化しないパケットはコントローラー側で無視される可能性がある。
 
----
-
-## FH6 Data Out 仕様
-
-- **設定箇所**: Settings → HUD and Gameplay → Data Out → ON  
-- **IP**: `127.0.0.1`（ユーザーが設定）  
-- **ポート**: デフォルト `5300`（ユーザーが設定）  
-  ⚠️ ゲーム側が 5200〜5300 を送信ソケットに使うため、**5301 以降を推奨**
-- **方向**: ゲーム → 外部アプリの一方向 UDP のみ
-- **送信タイミング**: プレイヤーが運転中のみ（メニュー・ポーズ中は送信なし）
-- **パケットサイズ**: 固定 324 バイト、エンディアン: リトルエンディアン
-
-### 振動に使えるフィールド（バイトオフセット・型・説明）
-
-全フィールドのオフセットは先頭から順番に積み上げる（パディングなし）。
-主要フィールドのオフセット一覧（先頭から）:
-
-| オフセット | 型   | フィールド名 | 説明 |
-|-----------|------|-------------|------|
-| 0         | S32  | IsRaceOn | レース中=1, メニュー=0 |
-| 4         | U32  | TimestampMS | タイムスタンプ |
-| 8         | F32  | EngineMaxRpm | |
-| 12        | F32  | EngineIdleRpm | |
-| 16        | F32  | CurrentEngineRpm | |
-| 20        | F32  | AccelerationX | |
-| 24        | F32  | AccelerationY | |
-| 28        | F32  | AccelerationZ | |
-| 32        | F32  | VelocityX | |
-| 36        | F32  | VelocityY | |
-| 40        | F32  | VelocityZ | |
-| 44        | F32  | AngularVelocityX | |
-| 48        | F32  | AngularVelocityY | |
-| 52        | F32  | AngularVelocityZ | |
-| 56        | F32  | Yaw | |
-| 60        | F32  | Pitch | |
-| 64        | F32  | Roll | |
-| 68        | F32  | NormalizedSuspensionTravelFL | |
-| 72        | F32  | NormalizedSuspensionTravelFR | |
-| 76        | F32  | NormalizedSuspensionTravelRL | |
-| 80        | F32  | NormalizedSuspensionTravelRR | |
-| 84        | F32  | TireSlipRatioFL | 0=グリップ, \|x\|>1=ロス |
-| 88        | F32  | TireSlipRatioFR | |
-| 92        | F32  | TireSlipRatioRL | |
-| 96        | F32  | TireSlipRatioRR | |
-| 100       | F32  | WheelRotationSpeedFL | |
-| 104       | F32  | WheelRotationSpeedFR | |
-| 108       | F32  | WheelRotationSpeedRL | |
-| 112       | F32  | WheelRotationSpeedRR | |
-| 116       | S32  | WheelOnRumbleStripFL | 1=ランブルストリップ上 |
-| 120       | S32  | WheelOnRumbleStripFR | |
-| 124       | S32  | WheelOnRumbleStripRL | |
-| 128       | S32  | WheelOnRumbleStripRR | |
-| 132       | S32  | WheelInPuddleFL | |
-| 136       | S32  | WheelInPuddleFR | |
-| 140       | S32  | WheelInPuddleRL | |
-| 144       | S32  | WheelInPuddleRR | |
-| 148       | F32  | **SurfaceRumbleFL** | ★ force feedback 用路面振動値 |
-| 152       | F32  | **SurfaceRumbleFR** | ★ |
-| 156       | F32  | **SurfaceRumbleRL** | ★ |
-| 160       | F32  | **SurfaceRumbleRR** | ★ |
-| 164       | F32  | TireSlipAngleFL | |
-| 168       | F32  | TireSlipAngleFR | |
-| 172       | F32  | TireSlipAngleRL | |
-| 176       | F32  | TireSlipAngleRR | |
-| 180       | F32  | TireCombinedSlipFL | 総合スリップ, 0=グリップ |
-| 184       | F32  | TireCombinedSlipFR | |
-| 188       | F32  | TireCombinedSlipRL | |
-| 192       | F32  | TireCombinedSlipRR | |
-| 196       | F32  | SuspensionTravelMetersFL | |
-| 200       | F32  | SuspensionTravelMetersFR | |
-| 204       | F32  | SuspensionTravelMetersRL | |
-| 208       | F32  | SuspensionTravelMetersRR | |
-| 212       | S32  | CarOrdinal | |
-| 216       | S32  | CarClass | |
-| 220       | S32  | CarPerformanceIndex | |
-| 224       | S32  | DrivetrainType | |
-| 228       | S32  | NumCylinders | |
-| 232       | U32  | CarGroup | ★ FH6 追加フィールド |
-| 236       | F32  | **SmashableVelDiff** | ★ 衝突速度差(m/s) FH6追加 |
-| 240       | F32  | SmashableMass | FH6追加 |
-| 244       | F32  | PositionX | |
-| 248       | F32  | PositionY | |
-| 252       | F32  | PositionZ | |
-| 256       | F32  | Speed | m/s |
-| 260       | F32  | Power | W |
-| 264       | F32  | Torque | Nm |
-| 268       | F32  | TireTempFL | |
-| 272       | F32  | TireTempFR | |
-| 276       | F32  | TireTempRL | |
-| 280       | F32  | TireTempRR | |
-| 284       | F32  | Boost | PSI |
-| 288       | F32  | Fuel | 0.0〜1.0 |
-| 292       | F32  | DistanceTraveled | |
-| 296       | F32  | BestLap | |
-| 300       | F32  | LastLap | |
-| 304       | F32  | CurrentLap | |
-| 308       | F32  | CurrentRaceTime | |
-| 312       | U16  | LapNumber | |
-| 314       | U8   | RacePosition | |
-| 315       | U8   | **Accel** | 0〜255 |
-| 316       | U8   | **Brake** | 0〜255 |
-| 317       | U8   | Clutch | |
-| 318       | U8   | **HandBrake** | |
-| 319       | U8   | Gear | |
-| 320       | S8   | Steer | -127〜127 |
-| 321       | S8   | NormalizedDrivingLine | |
-| 322       | S8   | NormalizedAIBrakeDifference | |
-| (323)     | —    | (合計 323 バイト消費、324 バイトパケット) | |
+**確認箇所**: `rumble_manager.py` の `_build_report()` でシーケンス番号を毎回更新しているか。
 
 ---
 
-## 実装方針
+**仮説3: rumble パケットのフォーマット不正**
 
-### 新規ファイル: `core/rumble_udp_listener.py`
+SDL の `UpdateRumble` は以下の構造でパケットを構築する：
 
-- `socket` + `struct` で UDP 受信（別スレッド）
-- `IsRaceOn == 0` の場合は振動を送らない（停止）
-- 振動強度の計算ロジック（優先度順）:
-  1. **衝突**: `SmashableVelDiff > 閾値`（例: 3.0 m/s）→ 大きい振動を短時間
-  2. **スリップ**: `max(abs(TireCombinedSlip*))` が高い → high_freq モーターに反映
-  3. **路面**: `max(SurfaceRumble*)` をそのまま low_freq に使う（これが主信号）
-- 出力は `rumble_manager` の既存 API に渡す（引数は事前確認必須）
-- `config.json` にポート番号を追加（デフォルト `5301`）
+```
+rumble_data[0x00] = コマンドID（rumble専用は 0x10）
+rumble_data[0x01] = シーケンス番号（0x0〜0xF）
+rumble_data[0x02..0x09] = 左スティック rumble（4バイト）+ 右スティック rumble（4バイト）
+```
 
-### `main.py` への統合
+HD Rumble 2 の4バイト構造（Switch 1 Pro から変更あり）:
+```
+[0] high_freq_amp  (low byte)
+[1] high_freq      (encoded)  = (hi_freq >> 8) | (hi_amp >> 8) << ... （SDL の RUMBLE_MAX=29000 基準）
+[2] low_freq_amp   (low byte)
+[3] low_freq       (encoded)
+```
+SDL ソースの正確なエンコードは `SDL_hidapi_switch2.c` の `UpdateRumble` 関数（1000行以降）を直接参照すること。
 
-- 既存の入力ループと並列で UDP リスナースレッドを起動
-- `--no-udp` フラグで無効化できると望ましい
+**確認箇所**: `rumble_manager.py` の `_build_report()` のバイト列を `test_bulk_rumble.py` で実際に送信し、物理振動を確認（最小検証）。
+
+---
+
+### 推奨アクション（振動問題、優先順）
+
+1. `test_bulk_rumble.py` を単独実行 → 物理振動するか確認（現状ベースライン）
+2. `core/constants.py` の init_sequence と上記 SDL の init_sequence をバイト比較
+3. `ReadFlashBlock` が init 前に送信されていなければ追加
+4. `rumble_manager.py` のシーケンス番号インクリメントを確認・修正
+5. rumble パケットのバイト列を SDL の `UpdateRumble` と比較
+
+---
+
+## 問題B：入力遅延
+
+### 原因
+
+`controller_usb.py` の入力読み取りが `dev.read(64, timeout=100)` のブロッキング呼び出しで、
+UDP パケット処理・vgamepad 更新・rumble 送信と同一ループで動いている。
+pywinusb のコールバック方式がノンブロッキングだったのに対し、pyusb-only になってこの問題が顕在化。
+
+### 修正方針
+
+入力読み取りを専用スレッドに分離し、Queue 経由でメインループに渡す：
+
+```python
+# input_thread（専用スレッド、ブロッキングOK）
+def _input_thread(self):
+    while self._running:
+        data = self.dev.read(64, timeout=100)  # ブロックしても構わない
+        if data:
+            self._input_queue.put(bytes(data))
+
+# メインループ（ノンブロッキング）
+while running:
+    try:
+        raw = input_queue.get_nowait()
+        process_input(raw)
+    except Empty:
+        pass
+    update_vgamepad()
+    send_rumble_if_needed()
+    time.sleep(0.001)
+```
+
+この修正は振動問題と独立しているため、先に対応可能。
+
+---
+
+## タスク：FH6 UDP テレメトリ振動対応（問題A が解決した後）
+
+### 概要
+
+FH6（Game Pass 版）は ViGEmBus 仮想デバイスに振動を送らない（GameInput API の制限、回避不可）。
+FH6 の公式 UDP テレメトリ（Data Out）を振動入力源として使う。
+
+### FH6 Data Out 仕様
+
+| 項目 | 値 |
+|------|-----|
+| 設定箇所 | Settings → HUD and Gameplay → Data Out → ON |
+| 宛先 IP | 127.0.0.1 |
+| ポート | **5301 以降を推奨**（5200〜5300 はゲームが使用） |
+| 方向 | ゲーム → 外部の一方向 UDP のみ |
+| 送信条件 | 運転中のみ（メニュー・ポーズ中は無送信） |
+| パケット | 固定 324 バイト、リトルエンディアン、パディングなし |
+
+### 振動に使うフィールド
+
+| オフセット | 型  | フィールド名 | 用途 |
+|-----------|-----|-------------|------|
+| 0 | S32 | IsRaceOn | 運転中=1、それ以外=0 |
+| 148 | F32 | SurfaceRumbleFL | ★ 路面振動（force feedback 生値） |
+| 152 | F32 | SurfaceRumbleFR | ★ |
+| 156 | F32 | SurfaceRumbleRL | ★ |
+| 160 | F32 | SurfaceRumbleRR | ★ |
+| 180 | F32 | TireCombinedSlipFL | ★ 総合スリップ（0=グリップ、\|x\|>1=ロス） |
+| 184 | F32 | TireCombinedSlipFR | ★ |
+| 188 | F32 | TireCombinedSlipRL | ★ |
+| 192 | F32 | TireCombinedSlipRR | ★ |
+| 116 | S32 | WheelOnRumbleStripFL | ランブルストリップ上=1 |
+| 236 | F32 | SmashableVelDiff | ★ 衝突速度差 m/s（FH6 追加フィールド） |
+| 315 | U8  | Accel | 0〜255 |
+| 316 | U8  | Brake | 0〜255 |
+| 318 | U8  | HandBrake | |
+
+### 新規: `core/rumble_udp_listener.py`
+
+```
+処理フロー:
+  1. socket.bind(("0.0.0.0", port)) で UDP 待受（別スレッド）
+  2. 324 バイト以外は無視
+  3. IsRaceOn == 0 → rumble_manager に 0, 0 を送信してリターン
+  4. 振動強度を計算（優先度順）:
+       衝突    : SmashableVelDiff > 3.0 m/s → low=1.0, high=0.8 を 200ms
+       スリップ : max(abs(TireCombinedSlip×4)) > 0.5 → high_freq に反映
+       路面    : max(SurfaceRumble×4) を low_freq の主信号に使用
+  5. rumble_manager の API を呼び出す（API は実装前にコード確認）
+  6. タイムアウト: 最後のパケットから 1 秒以上経過したら 0, 0 を送信
+
+インターフェース（rumble_manager.py の API 確認後に合わせること）:
+  class RumbleUdpListener(threading.Thread):
+      def __init__(self, rumble_manager, port: int): ...
+      def stop(self): ...
+```
+
+### 編集: `main.py`
+
+- `RumbleUdpListener` スレッドを起動・停止
+- `config.json` の `"fh6_udp_port"` キーからポート読み取り（デフォルト: 5301）
+- `--no-fh6-rumble` フラグで無効化
+
+### 編集: `config.json`
+
+```json
+{
+  "fh6_udp_port": 5301
+}
+```
 
 ### 参考実装
 
-HorizonHaptics（`https://github.com/haritha99ch/HorizonHaptics`）が同じパケット仕様を Python で実装している。`GameParsers/` ディレクトリのパーサーと `worker.py` の振動計算ロジックが参考になる。
+HorizonHaptics（https://github.com/haritha99ch/HorizonHaptics）
+- `GameParsers/` : 324 バイトパーサー（Python）
+- `worker.py` : SurfaceRumble・TireCombinedSlip を使った振動計算ロジック
+
+FH5 との差異（オフセットがずれるので流用不可）:
+`NumCylinders` の直後に `CarGroup`(U32)・`SmashableVelDiff`(F32)・`SmashableMass`(F32) が挿入されている
 
 ---
 
-## 制約・注意事項
+## 作業優先順序
 
-- `rumble_manager.py` の API は **コード確認後に合わせる**（仮定しない）
-- UDP はゲームからの一方向のみ。ゲームへの送信は不可
-- パケットは運転中のみ届く。無音時のフォールバック（振動ゼロ送信）を忘れずに
-- FH5 以前のパケットとの違い: `CarGroup`・`SmashableVelDiff`・`SmashableMass` が `NumCylinders` の直後に追加されている（オフセットがずれるので注意）
+```
+1. test_bulk_rumble.py で物理振動確認（問題A ベースライン）
+2. constants.py の init_sequence を SDL と比較・修正（問題A）
+3. 入力スレッド分離（問題B、問題A と独立して対応可）
+4. rumble_udp_listener.py 実装（問題A が解決してから）
+5. main.py への統合
+```

@@ -3,6 +3,9 @@ core/constants.py
 
 Switch 2 Pro Controller (VID 0x057E / PID 0x2069) -> Xbox 360 Input Converter
 Device constants and initialization sequences.
+
+Based on SDL's SDL_hidapi_switch2.c:
+  https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c
 """
 
 # ---------------------------------------------------------------------------
@@ -13,16 +16,44 @@ TARGET_PID = 0x2069
 USB_INTERFACE_NUMBER = 1  # Bulk OUT interface for initialization
 
 # ---------------------------------------------------------------------------
-# Initialization Commands (based on SDL's validated sequence for Switch 2 Pro)
-# See: libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
-#
-# CRITICAL FIX:
-#   The old sequence had 0x10 at index 12 (rumble enable) which is WRONG.
-#   SDL uses 0x01 for rumble enablement. 0x10 was the original Switch Pro
-#   subcommand prefix and does not apply to Switch 2 Pro over USB.
+# ReadFlashBlock Commands (sent BEFORE init_sequence in SDL)
+#   Address: little-endian at bytes [12..15]
+#   Response: 0x40 bytes at buffer[0x10..0x4F]
 # ---------------------------------------------------------------------------
-# SDL validated init sequence for Switch 2 Pro (SDL_hidapi_switch2.c)
-# Order matters: "Start output" must be LAST.
+def _read_flash_cmd(address: int) -> bytes:
+    """Build a ReadFlashBlock command for the given address."""
+    cmd = bytearray(16)
+    cmd[0] = 0x02
+    cmd[1] = 0x91
+    cmd[2] = 0x00
+    cmd[3] = 0x01
+    cmd[4] = 0x00
+    cmd[5] = 0x08
+    cmd[6] = 0x00
+    cmd[7] = 0x00
+    cmd[12] = address & 0xFF
+    cmd[13] = (address >> 8) & 0xFF
+    cmd[14] = (address >> 16) & 0xFF
+    cmd[15] = (address >> 24) & 0xFF
+    return bytes(cmd)
+
+READ_FLASH_COMMANDS = [
+    _read_flash_cmd(0x13000),   # Serial number
+    _read_flash_cmd(0x13040),   # Gyro bias
+    _read_flash_cmd(0x13080),   # Left stick calibration
+    _read_flash_cmd(0x130C0),   # Right stick calibration
+    _read_flash_cmd(0x13100),   # Accelerometer bias
+]
+
+# ---------------------------------------------------------------------------
+# Initialization Commands (SDL's validated sequence for Switch 2 Pro)
+#
+# CRITICAL: SDL sends each command with length = cmd[5] + 8 bytes.
+#   Example: 0x0A command has cmd[5]=0x14 (20) -> send 28 bytes.
+#   All commands below are already sized to match SDL exactly.
+#
+# Order matters. "Start output" (0x03 0x0D) must be LAST.
+# ---------------------------------------------------------------------------
 INIT_COMMANDS = [
     bytes([0x07, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
     bytes([0x0C, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]),
