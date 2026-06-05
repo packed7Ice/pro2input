@@ -97,7 +97,7 @@ class Switch2ProControllerUSB:
 
         return True
 
-    def read_input(self, timeout: int = 1000) -> list | None:
+    def read_input(self, timeout: int = 100) -> list | None:
         """Read an input report from Interface 0. Returns payload (list) or None."""
         if self.device is None or self.ep0_in is None:
             return None
@@ -111,53 +111,18 @@ class Switch2ProControllerUSB:
             raise
         return None
 
-    def write_output_report(self, report: bytes, retries: int = 3) -> bool:
+    def write_output_report(self, report: bytes) -> bool:
         """
         Write an HID Output Report.
-
-        Tries Interrupt OUT with endpoint object and explicit timeout,
-        then falls back to ctrl_transfer SET_REPORT, then Bulk OUT.
+        Uses a very short timeout so failures don't block the input loop.
         """
-        if self.device is None:
-            print("[USB] write_output_report: device is None")
+        if self.device is None or self.ep0_out is None:
             return False
-
-        # Try 1: Interface 0 Interrupt OUT (pass endpoint object + timeout)
-        if self.ep0_out is not None:
-            for attempt in range(retries):
-                try:
-                    # Pass the endpoint object itself and set a generous timeout
-                    self.device.write(self.ep0_out, report, timeout=500)
-                    return True
-                except usb.core.USBError as exc:
-                    errno = getattr(exc, 'errno', None)
-                    if errno in (110, 10060, 16) and attempt < retries - 1:
-                        time.sleep(0.005)
-                        continue
-                    print(f"[USB] ep0_out write failed: errno={errno}, exc={exc}")
-                    break
-
-        # Try 2: HID SET_REPORT ctrl_transfer
         try:
-            self.device.ctrl_transfer(
-                0x21, 0x09, 0x0202, 0, report, timeout=500
-            )
+            self.device.write(self.ep0_out.bEndpointAddress, report, timeout=10)
             return True
-        except usb.core.USBError as exc:
-            errno = getattr(exc, 'errno', None)
-            print(f"[USB] ctrl_transfer SET_REPORT failed: errno={errno}, exc={exc}")
-
-        # Try 3: Interface 1 Bulk OUT
-        if self.ep1_out is not None:
-            try:
-                self.device.write(self.ep1_out, report, timeout=500)
-                return True
-            except usb.core.USBError as exc:
-                errno = getattr(exc, 'errno', None)
-                print(f"[USB] ep1_out write failed: errno={errno}, exc={exc}")
-
-        print(f"[USB] All write methods exhausted. ep0_out={self.ep0_out}, ep1_out={self.ep1_out}")
-        return False
+        except usb.core.USBError:
+            return False
 
     def send_command(self, cmd: bytes) -> bool:
         """
