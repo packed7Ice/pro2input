@@ -91,7 +91,7 @@ def main():
             print(f"\n[INFO] Starting FH6 UDP telemetry listener on port {udp_port}...")
             try:
                 udp_hold = settings.get("fh6_udp.hold_ms", 150)
-            udp_listener = FH6RumbleUDPListener(
+                udp_listener = FH6RumbleUDPListener(
                     rumble,
                     port=udp_port,
                     strength=udp_strength,
