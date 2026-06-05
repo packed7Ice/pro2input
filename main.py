@@ -122,7 +122,7 @@ def main():
             payload = controller.read_input(timeout=100)
             if payload is not None:
                 mapper.update_from_payload(payload)
-            time.sleep(0.001)  # yield CPU ~1ms for pywinusb callback thread
+            time.sleep(0.001)  # yield CPU ~1ms
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user.")
     except Exception as e:

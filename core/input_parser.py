@@ -9,8 +9,8 @@ Parses raw HID input reports from Switch 2 Pro Controller into:
 Payload offsets derived from SDL's HandleSwitchProState:
   libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
 
-The raw HID report (64 bytes) from pywinusb has Report ID stripped,
-so payload[i] corresponds to SDL's data[i+1].
+The raw HID report (64 bytes) read via pyusb Interrupt IN has Report ID at byte 0.
+We skip it, so payload[i] corresponds to SDL's data[i+1].
 
 SDL data offsets (from HandleSwitchProState):
   data[5] (payload[4]): Face buttons (Y/X/B/A), R, ZR

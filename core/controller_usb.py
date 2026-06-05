@@ -2,25 +2,21 @@
 core/controller_usb.py
 
 Handles USB communication with the Switch 2 Pro Controller.
-Uses a hybrid approach:
-  - pyusb (libusb) for Interface 1 Bulk OUT/IN (initialization + rumble)
-  - pywinusb (Windows HID API) for Interface 0 HID (input reading)
+Uses pyusb (libusb) for ALL interfaces:
+  - Interface 0 (HID): Interrupt IN for input reading
+  - Interface 1 (Bulk): Bulk OUT for init + rumble, Bulk IN for responses
 
-Interface 0 MUST be driven by HidUsb (Windows standard HID driver).
+CRITICAL: pywinusb is NOT used. Opening the HID device via Windows HID API
+prevents pyusb from using Bulk OUT. SDL uses libusb for everything.
+
 Interface 1 should have WinUSB or libusbK installed via Zadig.
-
-CRITICAL initialization order (matches working test pattern):
-  1. pyusb claim Interface 1, send init commands, read responses.
-  2. Release Interface 1 claim (pywinusb needs this to open HID).
-  3. Open Interface 0 via pywinusb for input reading.
-  4. Keep pyusb device handle open for rumble bulk writes.
+Interface 0 MUST remain on the Windows HID driver (HidUsb) in Device Manager,
+but libusb will auto-detach it when we claim the interface.
 """
 
 import time
 import usb.core
 import usb.util
-
-from pywinusb.hid import HidDeviceFilter
 
 from core.constants import (
     TARGET_VID,
@@ -30,21 +26,24 @@ from core.constants import (
     LED_COMMAND,
 )
 
-# Bulk transfer timeout (ms).  SDL uses 1000ms; we use 200ms for faster failure recovery.
+# Interface numbers
+_HID_INTERFACE = 0
+_BULK_INTERFACE = 1
+
+# Transfer timeouts
 _BULK_WRITE_TIMEOUT_MS = 200
+_HID_READ_TIMEOUT_MS = 100
 
 
 class Switch2ProControllerUSB:
     """Manages USB connection and communication with Switch 2 Pro Controller."""
 
     def __init__(self):
-        # pyusb: opened once, kept alive for rumble bulk writes
         self._usb_device: usb.core.Device | None = None
-        self._ep1_out = None
-        self._ep1_in = None
+        self._ep_bulk_out = None
+        self._ep_bulk_in = None
+        self._ep_intr_in = None
 
-        # pywinusb: used for Interface 0 input reading
-        self.hid_device = None
         self._latest_input = None
         self._input_none_count = 0
 
@@ -57,158 +56,133 @@ class Switch2ProControllerUSB:
 
     def initialize_hid_mode(self) -> bool:
         """
-        1. Claim Interface 1 via pyusb, send init commands, read responses.
-        2. Release Interface 1 claim so pywinusb can open HID.
-        3. Open Interface 0 (HID) via pywinusb.
-        4. Keep pyusb device handle open for rumble bulk writes.
+        1. Enable auto-detach of kernel drivers (Windows HID driver).
+        2. Set configuration and find endpoints.
+        3. Claim BOTH interfaces (0 and 1).
+        4. Send init commands via Bulk OUT.
+        5. Start reading HID reports via Interrupt IN.
         """
         if self._usb_device is None:
             raise RuntimeError("Device not found. Call find_and_connect() first.")
 
-        # ---- Step 1: pyusb Interface 1 init ----
+        # Enable auto-detach so libusb can claim interfaces owned by Windows drivers
+        try:
+            self._usb_device.set_auto_detach_kernel_driver(True)
+        except Exception:
+            pass
+
         self._usb_device.set_configuration()
         cfg = self._usb_device.get_active_configuration()
 
-        intf1 = usb.util.find_descriptor(cfg, bInterfaceNumber=USB_INTERFACE_NUMBER)
-        if intf1 is None:
-            raise RuntimeError("Interface 1 not found")
+        # ---- Find endpoints ----
+        for intf in cfg:
+            if intf.bInterfaceNumber == _HID_INTERFACE:
+                for ep in intf:
+                    direction = usb.util.endpoint_direction(ep.bEndpointAddress)
+                    if direction == usb.util.ENDPOINT_IN:
+                        self._ep_intr_in = ep.bEndpointAddress
+            elif intf.bInterfaceNumber == _BULK_INTERFACE:
+                for ep in intf:
+                    direction = usb.util.endpoint_direction(ep.bEndpointAddress)
+                    if direction == usb.util.ENDPOINT_OUT:
+                        self._ep_bulk_out = ep.bEndpointAddress
+                    elif direction == usb.util.ENDPOINT_IN:
+                        self._ep_bulk_in = ep.bEndpointAddress
 
-        for ep in intf1:
-            direction = usb.util.endpoint_direction(ep.bEndpointAddress)
-            if direction == usb.util.ENDPOINT_OUT:
-                self._ep1_out = ep.bEndpointAddress
-            elif direction == usb.util.ENDPOINT_IN:
-                self._ep1_in = ep.bEndpointAddress
-
-        if self._ep1_out is None:
+        if self._ep_bulk_out is None:
             raise RuntimeError("Bulk OUT endpoint not found on Interface 1")
+        if self._ep_intr_in is None:
+            raise RuntimeError("Interrupt IN endpoint not found on Interface 0")
 
-        try:
-            usb.util.claim_interface(self._usb_device, USB_INTERFACE_NUMBER)
-        except usb.core.USBError:
-            pass
+        # ---- Claim both interfaces ----
+        for iface in (_HID_INTERFACE, _BULK_INTERFACE):
+            try:
+                usb.util.claim_interface(self._usb_device, iface)
+            except usb.core.USBError:
+                pass
 
-        # Send SDL-validated init sequence
+        # ---- Send init commands via Bulk OUT ----
         for cmd in INIT_COMMANDS:
             try:
-                self._usb_device.write(self._ep1_out, cmd, timeout=1000)
+                self._usb_device.write(self._ep_bulk_out, cmd, timeout=1000)
             except usb.core.USBError:
                 pass
             time.sleep(0.05)
             try:
-                if self._ep1_in:
-                    self._usb_device.read(self._ep1_in, 64, timeout=100)
+                if self._ep_bulk_in:
+                    self._usb_device.read(self._ep_bulk_in, 64, timeout=100)
             except usb.core.USBError:
                 pass
 
-        # Send LED command after init (SDL OpenJoystick does this)
+        # LED command
         try:
-            self._usb_device.write(self._ep1_out, LED_COMMAND, timeout=1000)
+            self._usb_device.write(self._ep_bulk_out, LED_COMMAND, timeout=1000)
         except usb.core.USBError:
             pass
         time.sleep(0.05)
         try:
-            if self._ep1_in:
-                self._usb_device.read(self._ep1_in, 64, timeout=100)
+            if self._ep_bulk_in:
+                self._usb_device.read(self._ep_bulk_in, 64, timeout=100)
         except usb.core.USBError:
             pass
 
-        # NOTE: Do NOT release Interface 1. libusb requires the interface
-        # to remain claimed for bulk I/O. pywinusb can still open HID on
-        # Interface 0 while Interface 1 is claimed by pyusb.
-
-        # ---- Step 2: Open HID device via pywinusb ----
-        devices = HidDeviceFilter(vendor_id=TARGET_VID, product_id=TARGET_PID).get_devices()
-        if not devices:
-            raise RuntimeError(
-                "HID device not found. Make sure Interface 0 uses HidUsb (Windows standard HID driver)."
-            )
-
-        self.hid_device = devices[0]
-        self.hid_device.open()
-        self.hid_device.set_raw_data_handler(self._on_input)
-
         return True
 
-    def _on_input(self, data):
-        """pywinusb callback: stores the latest input report."""
-        self._latest_input = list(bytes(data))[1:]  # Skip Report ID
-
     def read_input(self, timeout: int = 100) -> list | None:
-        """Return the latest captured input report."""
-        if self.hid_device is None:
+        """
+        Read HID input report via Interrupt IN (pyusb).
+        Returns payload with Report ID skipped.
+        """
+        if self._usb_device is None or self._ep_intr_in is None:
             return None
-        result = self._latest_input
-        self._latest_input = None
-        if result is None:
-            self._input_none_count += 1
-            if self._input_none_count == 50:
-                print("[USB] Warning: 50 consecutive read_input with no data")
-        else:
-            self._input_none_count = 0
-        return result
+
+        # First, try to read from the interrupt endpoint
+        try:
+            data = self._usb_device.read(self._ep_intr_in, 64, timeout=_HID_READ_TIMEOUT_MS)
+            if data and len(data) >= 11:
+                return list(bytes(data))[1:]  # Skip Report ID
+        except usb.core.USBError as exc:
+            if exc.errno == 10060:  # timeout
+                pass  # No data available
+            else:
+                print(f"[USB] Interrupt read error: {exc}")
+        except Exception:
+            pass
+
+        self._input_none_count += 1
+        if self._input_none_count == 50:
+            print("[USB] Warning: 50 consecutive read_input with no data")
+        return None
 
     def send_rumble_bulk(self, packet: bytes) -> bool:
         """
         Send a 64-byte rumble packet via Interface 1 Bulk OUT.
-        Uses a short timeout (200ms) so failures don't block the main loop.
-        Attempts to clear HALT on the endpoint if a timeout occurs.
         """
-        if self._usb_device is None or self._ep1_out is None:
-            print("[USB] send_rumble_bulk: device or endpoint not available")
+        if self._usb_device is None or self._ep_bulk_out is None:
             return False
         try:
-            transferred = self._usb_device.write(
-                self._ep1_out, packet, timeout=_BULK_WRITE_TIMEOUT_MS
+            self._usb_device.write(
+                self._ep_bulk_out, packet, timeout=_BULK_WRITE_TIMEOUT_MS
             )
-            print(f"[USB] Bulk OUT: {transferred} bytes sent")
             return True
         except usb.core.USBError as exc:
-            print(f"[USB] Bulk OUT error: {type(exc).__name__}: {exc} (errno={exc.errno})")
             if exc.errno == 32:  # Pipe error / stall
                 try:
-                    usb.util.clear_halt(self._usb_device, self._ep1_out)
-                    print("[USB] Cleared HALT on endpoint")
-                except Exception as clear_err:
-                    print(f"[USB] Failed to clear HALT: {clear_err}")
+                    usb.util.clear_halt(self._usb_device, self._ep_bulk_out)
+                except Exception:
+                    pass
             return False
-        except Exception as exc:
-            print(f"[USB] Bulk OUT unexpected error: {type(exc).__name__}: {exc}")
-            return False
-
-    def write_output_report(self, report: bytes) -> bool:
-        """
-        Write an HID Output Report via pywinusb.
-        NOTE: This currently does not work for Switch 2 Pro (Write timed out).
-        Kept for compatibility but send_rumble_bulk() should be used for rumble.
-        """
-        if self.hid_device is None:
-            return False
-        try:
-            out_reports = self.hid_device.find_output_reports()
-            if not out_reports:
-                return False
-            out_report = out_reports[0]
-            out_report.set_raw_data(list(report))
-            out_report.send()
-            return True
         except Exception:
             return False
 
     def cleanup(self):
-        """Close HID device and dispose pyusb resources."""
-        if self.hid_device:
-            try:
-                self.hid_device.close()
-            except Exception:
-                pass
-            self.hid_device = None
-
+        """Release interfaces and dispose pyusb resources."""
         if self._usb_device is not None:
-            try:
-                usb.util.release_interface(self._usb_device, USB_INTERFACE_NUMBER)
-            except Exception:
-                pass
+            for iface in (_BULK_INTERFACE, _HID_INTERFACE):
+                try:
+                    usb.util.release_interface(self._usb_device, iface)
+                except Exception:
+                    pass
             try:
                 usb.util.dispose_resources(self._usb_device)
             except Exception:
