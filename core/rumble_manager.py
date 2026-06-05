@@ -53,6 +53,9 @@ class RumbleManager:
         self._last_sent_large = 0
         self._last_sent_small = 0
 
+        # When True, ignore XInput callbacks (used when FH6 UDP is active)
+        self.ignore_xinput = False
+
     def start(self):
         """Start the background sender thread."""
         self._running = True
@@ -83,8 +86,8 @@ class RumbleManager:
         Callback signature for vgamepad.VX360Gamepad.register_notification().
         Receives force-feedback events from the game/OS.
         """
-        if large_motor != 0 or small_motor != 0:
-            print(f"[XInput] Rumble event: large={large_motor}, small={small_motor}")
+        if self.ignore_xinput:
+            return
         self.send_rumble(large_motor, small_motor)
 
     def _build_rumble_packet(self, large_motor: int, small_motor: int) -> bytes:

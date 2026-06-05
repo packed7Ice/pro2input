@@ -111,18 +111,26 @@ class Switch2ProControllerUSB:
             raise
         return None
 
-    def write_output_report(self, report: bytes) -> bool:
+    def write_output_report(self, report: bytes, retries: int = 3) -> bool:
         """
         Write an HID Output Report to Interface 0 Interrupt OUT endpoint.
         This is the correct transport for Switch 2 Pro rumble data.
+        Retries on transient USB errors.
         """
         if self.device is None or self.ep0_out is None:
             return False
-        try:
-            self.device.write(self.ep0_out.bEndpointAddress, report)
-            return True
-        except usb.core.USBError:
-            return False
+        for attempt in range(retries):
+            try:
+                self.device.write(self.ep0_out.bEndpointAddress, report)
+                return True
+            except usb.core.USBError as exc:
+                errno = getattr(exc, 'errno', None)
+                # Retry on timeout (110) or busy (16)
+                if errno in (110, 16) and attempt < retries - 1:
+                    time.sleep(0.005)
+                    continue
+                return False
+        return False
 
     def send_command(self, cmd: bytes) -> bool:
         """

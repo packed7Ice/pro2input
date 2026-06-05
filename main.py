@@ -91,7 +91,9 @@ def main():
                     timeout_ms=udp_timeout,
                 )
                 udp_listener.start()
+                rumble.ignore_xinput = True
                 print("[OK ] FH6 UDP listener started.")
+                print("[INFO] XInput rumble events will be ignored (UDP takes priority).")
             except OSError as exc:
                 print(f"[WARN] Could not start UDP listener: {exc}")
                 udp_listener = None
