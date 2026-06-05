@@ -1,16 +1,16 @@
 @echo off
 chcp 65001 >nul
-title pro2input - Switch 2 Pro Controller to XInput Converter
+title pro2input - Switch 2 Pro Controller to XInput Converter (No UDP)
 echo ============================================
-echo  pro2input Launcher
+echo  pro2input Launcher (UDP Disabled)
 echo ============================================
 echo.
 echo  [INFO] Starting Switch 2 Pro Controller converter...
+echo  [INFO] FH6 UDP telemetry rumble is DISABLED.
 echo  [INFO] Press Ctrl+C to stop.
 echo.
 
-REM Pass any command-line arguments (e.g. --no-udp) to main.py
-python main.py %*
+python main.py --no-udp
 
 if errorlevel 1 (
     echo.

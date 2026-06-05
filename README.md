@@ -20,6 +20,7 @@ A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller*
 - **Analog Stick Support** — Both left and right sticks with correct axis polarity
 - **Trigger Synthesis** — ZL/ZR digital buttons mapped to analog LT/RT triggers
 - **HD Rumble 2 Feedback** — Experimental force-feedback support via SDL-derived protocol
+- **FH6 UDP Telemetry Rumble** — Forza Horizon 6 Data Out UDP support for force-feedback (bypasses virtual controller limitation)
 - **Modular Architecture** — Clean separation of USB transport, input parsing, and mapping layers
 
 ### Requirements
@@ -62,6 +63,8 @@ Simply double-click **`start.bat`** in the project folder.
 A console window will open and the converter will start automatically.
 Press **Ctrl+C** in the window to stop.
 
+To disable FH6 UDP telemetry rumble, use **`start_no_udp.bat`** instead.
+
 #### Option 2: Command line
 
 ```bash
@@ -72,6 +75,12 @@ The script will:
 1. Create a virtual Xbox 360 controller
 2. Find and initialize the Switch 2 Pro Controller
 3. Start the input loop with rumble feedback enabled
+
+**Command-line options:**
+
+| Flag | Description |
+|------|-------------|
+| `--no-udp` | Disable FH6 UDP telemetry rumble (use XInput rumble only) |
 
 #### Settings GUI
 
@@ -121,7 +130,8 @@ pro2input/
 | `tools/stick_raw_diagnostic.py` | Inspect raw stick values |
 | `tools/xinput_rumble_test.py` | Test XInput force-feedback |
 | `tools/rumble_hid_control_test.py` | Direct USB rumble debug |
-| `tools/fh6_rumble_debug.py` | Log FH6 rumble events (supports Xbox 360 / DS4 mode) |
+| `tools/fh6_udp_debug.py` | Standalone FH6 UDP packet inspector |
+| `tools/fh6_rumble_debug.py` | Log FH6 XInput rumble events (supports Xbox 360 / DS4 mode) |
 | `tools/settings_ui.py` | Launch GUI for button remapping and configuration |
 
 ### Troubleshooting
@@ -141,8 +151,13 @@ pro2input/
 **Forza Horizon 6: no rumble in-game**
 - FH6 does **not** send vibration data to virtual controllers created by ViGEmBus, even in Xbox 360 or DS4 mode.
 - This is a known limitation of virtual gamepads with FH6, not a bug in this project.
-- The `fh6_rumble_debug.py` tool will only show `led=1/16` (controller init) but no actual `large_motor` / `small_motor` data during gameplay.
-- **Workaround:** Use Steam Input to present the controller as a generic gamepad, or use a physical Xbox controller via HidHide for rumble.
+- **Solution:** Enable **Data Out** in FH6 settings and use the built-in UDP telemetry rumble feature:
+  1. In FH6, go to **Settings → HUD & Gameplay → Data Out** and set it to **ON**.
+  2. Set the **Data Out IP Address** to your PC's local IP (e.g., `127.0.0.1` for same machine).
+  3. Set the **Data Out Port** to `5301` (default; configurable in `config.json`).
+  4. Start `main.py` — UDP telemetry will drive rumble automatically.
+- Verify UDP packets are arriving with `tools/fh6_udp_debug.py`.
+- **Alternative:** Use Steam Input to present the controller as a generic gamepad, or use a physical Xbox controller via HidHide for rumble.
 
 ### Acknowledgments
 
@@ -168,6 +183,7 @@ See [LICENSE](LICENSE) for details.
 - **アナログスティック対応** — 左右スティックともに正しい軸方向で動作
 - **トリガー合成** — ZL/ZR のデジタルボタンをアナログ LT/RT トリガーに変換
 - **HD 振動2 フィードバック** — SDL 導出プロトコルによる実験的な HD 振動2 対応
+- **FH6 UDP テレメトリ 振動** — Forza Horizon 6 の Data Out UDP による振動対応（仮想コントローラーの制限を回避）
 - **モジュール化アーキテクチャ** — USB 通信、入力解析、マッピングを明確に分離
 
 ### 必要条件
@@ -209,6 +225,8 @@ pip install pyusb vgamepad
 コンソールウィンドウが開き、自動的に変換が開始されます。
 停止するにはウィンドウ内で **Ctrl+C** を押してください。
 
+FH6 UDP テレメトリ 振動を無効にする場合は **`start_no_udp.bat`** を使用してください。
+
 #### 方法2: コマンドライン
 
 ```bash
@@ -219,6 +237,12 @@ python main.py
 1. 仮想 Xbox 360 コントローラーの作成
 2. Switch 2 Pro コントローラーの検出と初期化
 3. 振動フィードバック付き入力ループの開始
+
+**コマンドライン オプション：**
+
+| フラグ | 説明 |
+|--------|------|
+| `--no-udp` | FH6 UDP テレメトリ 振動を無効化（XInput 振動のみ使用） |
 
 #### 設定 GUI
 
@@ -268,7 +292,8 @@ pro2input/
 | `tools/stick_raw_diagnostic.py` | スティック生値の確認 |
 | `tools/xinput_rumble_test.py` | XInput 振動のテスト |
 | `tools/rumble_hid_control_test.py` | USB 直振動デバッグ |
-| `tools/fh6_rumble_debug.py` | FH6 の振動イベントを記録（Xbox 360 / DS4 両対応） |
+| `tools/fh6_udp_debug.py` | FH6 UDP パケットの単体検証ツール |
+| `tools/fh6_rumble_debug.py` | FH6 の XInput 振動イベントを記録（Xbox 360 / DS4 両対応） |
 | `tools/settings_ui.py` | ボタンリマッピング・設定 GUI の起動 |
 
 ### トラブルシューティング
@@ -288,8 +313,13 @@ pro2input/
 **Forza Horizon 6 でゲーム内で振動しない**
 - FH6 は **ViGEmBus による仮想コントローラー（Xbox 360 / DS4 両方）に振動データを送信しません**。
 - これは仮想ゲームパッドの既知の限界であり、本プロジェクトのバグではありません。
-- `fh6_rumble_debug.py` で確認できるのは `led=1/16`（コントローラー初期化）のみで、ゲームプレイ中の `large_motor` / `small_motor` データは一切来ません。
-- **回避策:** Steam Input を使ってコントローラーを汎用ゲームパッドとして認識させるか、HidHide を使って物理 Xbox コントローラーのみを使用する。
+- **解決策:** FH6 設定で **Data Out（データ出力）** を有効化し、内蔵の UDP テレメトリ 振動機能を使用します：
+  1. FH6 内で **設定 → HUD & ゲームプレイ → Data Out** を **ON** に設定します。
+  2. **Data Out IP アドレス** を PC のローカル IP に設定します（同じ PC の場合は `127.0.0.1`）。
+  3. **Data Out ポート** を `5301` に設定します（デフォルト；`config.json` で変更可能）。
+  4. `main.py` を起動すると、UDP テレメトリが自動的に振動を制御します。
+- UDP パケットが届いているかは `tools/fh6_udp_debug.py` で確認できます。
+- **その他の回避策:** Steam Input を使ってコントローラーを汎用ゲームパッドとして認識させるか、HidHide を使って物理 Xbox コントローラーのみを使用する。
 
 ### 謝辞
 

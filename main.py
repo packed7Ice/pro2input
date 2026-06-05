@@ -11,7 +11,9 @@ Requires:
 """
 
 import sys
+import time
 import argparse
+import ctypes
 
 from core.controller_usb import Switch2ProControllerUSB
 from core.rumble_manager import RumbleManager
@@ -21,6 +23,13 @@ from config.settings import Settings
 
 
 def main():
+    # Improve Windows timer resolution for accurate 1ms sleeps
+    # (required so time.sleep(0.001) actually yields ~1ms, not ~15ms)
+    try:
+        ctypes.windll.winmm.timeBeginPeriod(1)
+    except Exception:
+        pass
+
     parser = argparse.ArgumentParser(
         description="Switch 2 Pro Controller -> Xbox 360 Input Converter"
     )
@@ -113,6 +122,7 @@ def main():
             payload = controller.read_input(timeout=100)
             if payload is not None:
                 mapper.update_from_payload(payload)
+            time.sleep(0.001)  # yield CPU ~1ms for pywinusb callback thread
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user.")
     except Exception as e:
@@ -123,13 +133,27 @@ def main():
         try:
             if udp_listener:
                 udp_listener.stop()
+        except Exception:
+            pass
+        try:
             if rumble:
                 rumble.stop()
+        except Exception:
+            pass
+        try:
             controller.cleanup()
+        except Exception:
+            pass
+        try:
             mapper.reset()
-            print("[OK ] Virtual controller reset.")
-        except KeyboardInterrupt:
-            print("\n[INFO] Interrupted during cleanup, forcing exit.")
+        except Exception:
+            pass
+        print("[OK ] Virtual controller reset.")
+        # Restore Windows timer resolution
+        try:
+            ctypes.windll.winmm.timeEndPeriod(1)
+        except Exception:
+            pass
         print("Done.")
 
 

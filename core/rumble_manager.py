@@ -2,20 +2,21 @@
 core/rumble_manager.py
 
 Converts Xbox 360 force-feedback (large_motor, small_motor) into
-Switch 2 Pro Controller HD Rumble 2 packets and sends them via HID Output Report.
+Switch 2 Pro Controller HD Rumble 2 packets and sends them via Interface 1 Bulk OUT.
 
 Based on SDL's official implementation:
   libsdl-org/SDL/src/joystick/hidapi/SDL_hidapi_switch2.c
 
 Key differences from original Switch Pro Controller:
   - Report ID: 0x02 (not 0x10/0x01)
-  - Transport: HID Output Report via ctrl_transfer (not Bulk OUT)
+  - Transport: Interface 1 Bulk OUT (not HID Output Report)
   - Packet size: exactly 64 bytes
   - Actuator encoding: 5 bytes each with different bit packing
 """
 
 import queue
 import threading
+import time
 
 from core.constants import (
     SWITCH2_RUMBLE_REPORT_ID,
@@ -24,6 +25,9 @@ from core.constants import (
     RUMBLE_LF_FREQ,
     RUMBLE_AMP_MAX,
 )
+
+# SDL's RUMBLE_INTERVAL: minimum 12ms between packets
+RUMBLE_INTERVAL_SEC = 0.012
 
 
 class RumbleManager:
@@ -34,6 +38,7 @@ class RumbleManager:
       or from the UDP telemetry listener.
     - Queues packets; the caller (main.py input loop) is responsible for
       calling drain_and_send() on the main thread to avoid USB contention.
+    - Throttles sends to RUMBLE_INTERVAL (12ms) to prevent USB pipe errors.
     - Sends neutral packets when no command is pending to silence motors.
     """
 
@@ -47,6 +52,10 @@ class RumbleManager:
         # Track last sent values to avoid duplicate writes
         self._last_sent_large = 0
         self._last_sent_small = 0
+
+        # Throttle sends to prevent USB pipe errors
+        self._last_send_time = 0.0
+        self._pending_packet: bytes | None = None
 
         # When True, ignore XInput callbacks (used when FH6 UDP is active)
         self.ignore_xinput = False
@@ -62,8 +71,9 @@ class RumbleManager:
     def drain_and_send(self):
         """
         Must be called periodically (e.g. inside the main input loop).
-        Drains the queue and sends the latest packet.  Also sends a
-        neutral packet if no new command arrived and motors are active.
+        Drains the queue and sends the latest packet, throttled to
+        RUMBLE_INTERVAL (12ms). Also sends a neutral packet if no new
+        command arrived and motors are active.
         """
         # Gather the latest queued value
         latest_packet = None
@@ -74,13 +84,24 @@ class RumbleManager:
                 break
 
         if latest_packet is not None:
-            self._send_packet(latest_packet)
+            self._pending_packet = latest_packet
+
+        # Throttle: only send every 12ms (SDL's RUMBLE_INTERVAL)
+        now = time.time()
+        if now - self._last_send_time < RUMBLE_INTERVAL_SEC:
+            return  # Too soon; keep _pending_packet for next cycle
+
+        if self._pending_packet is not None:
+            self._send_packet(self._pending_packet)
+            self._pending_packet = None
+            self._last_send_time = now
         else:
             # No new command: silence if motors are still active
             if self._last_sent_large != 0 or self._last_sent_small != 0:
                 self._send_packet(self._build_neutral_packet())
                 self._last_sent_large = 0
                 self._last_sent_small = 0
+                self._last_send_time = now
 
     def send_rumble(self, large_motor: int, small_motor: int):
         """
@@ -160,10 +181,10 @@ class RumbleManager:
         return bytes(data)
 
     def _send_packet(self, packet: bytes):
-        """Send the 64-byte HID Output Report via Interface 0 Interrupt OUT."""
+        """Send the 64-byte rumble packet via Interface 1 Bulk OUT."""
         try:
-            ok = self.usb.write_output_report(packet)
+            ok = self.usb.send_rumble_bulk(packet)
             if not ok:
-                print("[Rumble] HID write_output_report returned False")
-        except Exception as exc:
-            print(f"[Rumble] HID write failed: {exc}")
+                pass  # Silent: errors are already printed by controller_usb
+        except Exception:
+            pass  # Silent: avoid spamming console on transient USB errors
