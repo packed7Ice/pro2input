@@ -34,6 +34,7 @@ class Switch2ProControllerUSB:
         # pywinusb: used for Interface 0 input/output
         self.hid_device = None
         self._latest_input = None
+        self._input_none_count = 0
 
     def find_and_connect(self) -> bool:
         """Find the controller."""
@@ -120,21 +121,30 @@ class Switch2ProControllerUSB:
             return None
         result = self._latest_input
         self._latest_input = None
+        if result is None:
+            self._input_none_count += 1
+            if self._input_none_count == 50:
+                print("[USB] Warning: 50 consecutive read_input with no data")
+        else:
+            self._input_none_count = 0
         return result
 
     def write_output_report(self, report: bytes) -> bool:
         """Write an HID Output Report via pywinusb."""
         if self.hid_device is None:
+            print("[USB] write_output_report: hid_device is None")
             return False
         try:
             out_reports = self.hid_device.find_output_reports()
             if not out_reports:
+                print("[USB] write_output_report: no output reports found")
                 return False
             out_report = out_reports[0]
             out_report.set_raw_data(list(report))
             out_report.send()
             return True
-        except Exception:
+        except Exception as exc:
+            print(f"[USB] write_output_report exception: {type(exc).__name__}: {exc}")
             return False
 
     def cleanup(self):
