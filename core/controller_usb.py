@@ -155,19 +155,25 @@ class Switch2ProControllerUSB:
         Attempts to clear HALT on the endpoint if a timeout occurs.
         """
         if self._usb_device is None or self._ep1_out is None:
+            print("[USB] send_rumble_bulk: device or endpoint not available")
             return False
         try:
-            self._usb_device.write(self._ep1_out, packet, timeout=_BULK_WRITE_TIMEOUT_MS)
+            transferred = self._usb_device.write(
+                self._ep1_out, packet, timeout=_BULK_WRITE_TIMEOUT_MS
+            )
+            print(f"[USB] Bulk OUT: {transferred} bytes sent")
             return True
         except usb.core.USBError as exc:
-            # If the endpoint is stalled, try to clear it once
+            print(f"[USB] Bulk OUT error: {type(exc).__name__}: {exc} (errno={exc.errno})")
             if exc.errno == 32:  # Pipe error / stall
                 try:
                     usb.util.clear_halt(self._usb_device, self._ep1_out)
-                except Exception:
-                    pass
+                    print("[USB] Cleared HALT on endpoint")
+                except Exception as clear_err:
+                    print(f"[USB] Failed to clear HALT: {clear_err}")
             return False
-        except Exception:
+        except Exception as exc:
+            print(f"[USB] Bulk OUT unexpected error: {type(exc).__name__}: {exc}")
             return False
 
     def write_output_report(self, report: bytes) -> bool:

@@ -147,7 +147,7 @@ class RumbleManager:
         return self._build_report(RUMBLE_NEUTRAL_ACTUATOR)
 
     def _build_report(self, actuator: bytes) -> bytes:
-        """Assemble the common 64-byte report layout with the given actuator data."""
+        """Assemble the 64-byte report layout with the given actuator data."""
         self._seq = (self._seq + 1) & 0x0F
         seq_byte = 0x50 | self._seq
 
@@ -155,8 +155,8 @@ class RumbleManager:
         report[0] = SWITCH2_RUMBLE_REPORT_ID   # 0x02
         report[1] = seq_byte
         report[2:7] = actuator                   # left actuator (5 bytes)
-        report[17] = seq_byte                    # sequence copy
-        report[18:23] = actuator                 # right actuator (often same as left)
+        # Copy seq + actuator to [11:16] (tested working pattern)
+        report[11:17] = report[1:7]              # copy seq + actuator
 
         return bytes(report)
 
