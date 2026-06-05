@@ -1,167 +1,147 @@
 # pro2input FH6 UDP Rumble 開発記録
 
-## 現在の状態（2026-06-06）
+## 最終状態（2026-06-06 解決済み）
 
 | 項目 | 状態 |
 |------|------|
 | UDP 受信（FH6 Data Out） | ✅ 正常（324-byte パケット受信中） |
 | ランブル値計算 | ✅ 正常（Slip/Surface/Smash → large/small 変換） |
-| Bulk OUT 書き込み | ✅ エラーなし（200ms タイムアウト設定） |
-| ボタン入力 | ✅ 正常（遅延解消） |
-| **コントローラー振動** | ❌ **未解決（物理的に感じない）** |
+| コントローラー振動 | ✅ **解決済み** |
+| ボタン入力 | ✅ 正常（遅延なし） |
+| USB 安定性 | ✅ Interface 0/1 ともに libusbK |
 
 ---
 
-## 実装済みの変更
+## 解決した問題と根本原因
 
-### 1. FH6 UDP テレメトリ リスナー (`core/rumble_udp_listener.py`)
+### 問題A: 振動が全くしなかった
 
-- 324-byte UDP パケットをパース
-- `RaceOn`, `SurfaceRumble`, `TireCombinedSlip`, `SmashableVelDiff` を抽出
-- 優先度順: 衝突 > スリップ > サーフェス
-- `RumbleManager.send_rumble(large, small)` に送信
+**根本原因（2つ）:**
 
-### 2. ランブル送信方法の変更
+1. **誤ったエンドポイント**: 振動パケットを Interface 1 Bulk OUT（ep 0x02）に送っていた。
+   正しいエンドポイントは **Interface 0 Interrupt OUT（ep 0x01）**。
 
-**変更前:** pywinusb HID Output Report → Write timed out
-**変更後:** pyusb Interface 1 Bulk OUT → エラーなし
+2. **パケットオフセットのバグ**: `_build_report()` で SDL の `memcpy(&rumble_data[0x11], ...)` の
+   `0x11`（16進 = 10進で **17**）を `11`（10進）と誤解し、右アクチュエータのコピー先が
+   6バイトずれていた（`report[11:17]` → `report[17:23]` に修正）。
 
-`controller_usb.py` のアーキテクチャ変更:
-- pywinusb: Interface 0 HID 入力読み取り（コールバック方式）
-- pyusb: Interface 1 Bulk OUT（init + rumble）
-- Interface 1 は claim したまま保持（解放しない）
+**発見方法:** `tools/rumble_comprehensive_test.py` で全エンドポイント・全フォーマットを網羅テスト。
+Test 5（Interface 0 Interrupt OUT）で初めて物理振動を確認。
 
-### 3. SDL 準拠の初期化シーケンス
+### 問題B: 振動がすぐ止まった
 
-`core/constants.py` に追加:
-- `READ_FLASH_COMMANDS`: 5 つのアドレス（0x13000〜0x13100）
-- `INIT_COMMANDS`: SDL の 10 コマンド順序
-- パケット送信長: `cmd[5] + 8` バイト（SDL 規則）
+**根本原因（2つ）:**
 
-### 4. 入力遅延解消
+1. **重複送信防止ロジック**: `send_rumble()` に「値が変わらなければパケットを作らない」
+   チェックがあった。Switch 2 Pro のモーターは **継続的にパケットを受け取らないと停止する**
+   ため、値が一定でも 12ms ごとに送り続ける必要がある。
 
-- `timeBeginPeriod(1)` で Windows タイマー解像度を 1ms に設定
-- `time.sleep(0.001)` で CPU yield（pywinusb コールバック用）
-- pywinusb のコールバック方式はノンブロッキングで遅延なし
+2. **Interface 0 のドライバー競合**: Windows HID ドライバーと libusb が Interface 0 を
+   共有していたため、USB 書き込みが断続的に失敗していた。
+   → Zadig で Interface 0/1 ともに libusbK に統一して解決。
 
-### 5. ボタンビットマスク修正
+### 問題C: 入力遅延（副次的に解決）
 
-`core/input_parser.py`:
-- SDL の `HandleSwitchProState` と一致するオフセット（payload[4:8]）
-- 正しいビットマスク（bit0=Y, bit1=X, bit2=B, bit3=A）
-- 文字ベースマッピング（Switch の文字配置をそのまま Xbox に渡す）
+pywinusb のコールバック方式から pyusb 専用スレッド方式に切り替えたことで解消。
+ブロッキング `dev.read()` をデーモンスレッドに分離し、メインループはノンブロッキングで動作。
 
 ---
 
-## 未解決の問題
+## 最終アーキテクチャ
 
-### 問題A: 振動が全くしない
+```
+Switch 2 Pro Controller (USB)
+  │
+  ├─ Interface 0 (libusbK via Zadig)
+  │   ├─ ep 0x81  Interrupt IN  ← HID 入力レポート  [専用スレッド: USB-InputReader]
+  │   └─ ep 0x01  Interrupt OUT ← 振動パケット送信   [メインループから 12ms ごと]
+  │
+  └─ Interface 1 (libusbK via Zadig)
+      ├─ ep 0x02  Bulk OUT ← 初期化コマンド（起動時のみ）
+      └─ ep 0x82  Bulk IN  ← 初期化レスポンス
 
-**症状:**
-- UDP からランブル値は計算されている（`small=204` 等）
-- Bulk OUT 書き込みは成功を示唆（エラーなし）
-- コントローラー物理的に振動しない
+Python プロセス
+  ├─ main.py               メインループ（1ms tick）
+  ├─ core/controller_usb.py  pyusb 通信（入力スレッド管理・振動送信）
+  ├─ core/rumble_manager.py  振動状態管理（12ms 周期で継続送信）
+  └─ core/rumble_udp_listener.py  FH6 UDP テレメトリ受信（専用スレッド）
 
-**検証済み:**
-- `test_bulk_rumble.py`（旧スクリプト）は現在実行不可（デバイス状態変化のため）
-- pywinusb 排除後、Bulk OUT はエラーなしに変更
-- ReadFlashBlock + SDL init シーケンス追加済み
-- パケット送信長 `cmd[5]+8` 対応済み
-
-**残存の仮説:**
-1. **パケットフォーマット不正**: `RumbleManager._build_report()` のバイトレイアウトが SDL と異なる
-   - SDL: `memcpy(&rumble_data[0x11], &rumble_data[0x01], 6)` でシーケンス番号コピー
-   - 現在: `[11:17] = [1:7]` に変更済みだが、実際の振動未確認
-2. **Actuator エンコーディング**: `EncodeHDRumble` の 5 バイト構造が SDL と異なる可能性
-3. **コントローラー側の rumble 無効化**: Init シーケンス中の rumble 有効化コマンドが不十分
-4. **Zadig 設定**: Interface 1 のドライバーが libusbK ではなく WinUSB の可能性
-
-### 問題B: テストスクリプトの再現性
-
-**症状:**
-- `test_bulk_rumble.py`（一時ファイル）が現在は `Operation timed out` で失敗
-- 原因: `main.py` 実行後のデバイス状態（Interface 1 claim 状態）が影響
-
-**解決策:**
-- コントローラー物理的に再接続してからテスト実行が必要
-
----
-
-## 推奨される次のアクション
-
-### 優先度 1: 振動の最小検証
-
-```bash
-# 1. コントローラーを物理的に再接続（USB 抜き差し）
-# 2. test_bulk_rumble.py を再実行して、物理振動を確認
-python "C:\Users\zutuu\AppData\Local\Temp\opencode\test_bulk_rumble.py"
+FH6 → UDP port 5301 → rumble_udp_listener → rumble_manager → controller_usb → ep 0x01
 ```
 
-**確認項目:**
-- コントローラーが手に持って振動を感じるか
-- 成功すればパケットフォーマットは OK → `main.py` 側の問題
-- 失敗すればパケットフォーマット or init シーケンスの問題
+---
 
-### 優先度 2: Zadig 設定確認
+## 振動パケット仕様（確定）
 
-1. Zadig を開く
-2. Options → List All Devices
-3. "Switch Pro Controller" を選択
-4. Interface 1 が **libusbK** になっているか確認（WinUSB ではなく）
-5. 必要に応じて libusbK に再インストール
-
-### 優先度 3: SDL パケットダンプ
-
-SDL の `UpdateRumble` 関数の実際の出力バイト列をキャプチャ：
-
-```c
-// SDL_hidapi_switch2.c の UpdateRumble 関数
-// rumble_data[0..63] の実際の値を確認
+```
+64バイト HID Output Report
+  [0]     = 0x02  (Report ID)
+  [1]     = 0x50 | (seq & 0x0F)  (シーケンス番号)
+  [2:7]   = 左アクチュエータ 5バイト  (SDL EncodeHDRumble)
+  [7:17]  = ゼロパディング
+  [17:23] = [1:7] のコピー  (SDL: memcpy(&rumble_data[0x11], &rumble_data[0x01], 6))
+  [23:64] = ゼロパディング
 ```
 
-Python 側の `_build_report()` と比較して差異を特定。
-
-### 優先度 4: 代替アプローチ
-
-SDL の hidapi C ライブラリを Python から直接呼び出す：
-
-```bash
-pip install hidapi
+アクチュエータエンコーディング（SDL `EncodeHDRumble`）:
+```python
+data[0] = high_freq & 0xFF
+data[1] = ((high_amp >> 4) & 0xFC) | ((high_freq >> 8) & 0x03)
+data[2] = (high_amp >> 12) | ((low_freq << 4) & 0xFF)
+data[3] = (low_amp & 0xC0) | ((low_freq >> 4) & 0x3F)
+data[4] = (low_amp >> 8) & 0xFF
 ```
 
-`hidapi` パッケージは SDL と同じ libusb/hidapi バックエンドを使用し、Switch 2 Pro の rumble を正しく動作させる可能性がある。
+デフォルト周波数: HF = 0x0187（~600Hz）、LF = 0x0112（~260Hz）
+振幅上限: 29000（SDL の safe maximum）
 
 ---
 
-## ファイル変更一覧
+## Zadig 設定（必須）
 
-| ファイル | 変更内容 |
+| Interface | ドライバー | 用途 |
+|-----------|-----------|------|
+| Interface 0 | **libusbK** | 入力読み取り + 振動送信 |
+| Interface 1 | **libusbK** | 初期化コマンド |
+
+> ⚠️ Interface 0 を Windows HID（HidUsb）のままにすると、libusb との競合で
+> 振動が断続的に停止する。
+
+---
+
+## ファイル構成
+
+| ファイル | 役割 |
 |---|---|
-| `core/constants.py` | SDL init シーケンス、ReadFlashBlock、LED_COMMAND、RUMBLE_NEUTRAL_ACTUATOR |
-| `core/controller_usb.py` | pyusb Bulk OUT + pywinusb HID 入力ハイブリッド |
-| `core/input_parser.py` | SDL 準拠のボタンオフセットとビットマスク |
-| `core/rumble_manager.py` | 12ms 間引き、Bulk OUT 送信、エラー抑制 |
-| `core/rumble_udp_listener.py` | 新規: FH6 UDP パケットパースと振動計算 |
-| `main.py` | UDP リスナー統合、`timeBeginPeriod(1)`、`--no-udp` フラグ |
-| `config/settings.py` | `fh6_udp` デフォルト設定追加 |
-| `config.json` | `fh6_udp` 設定保存 |
-| `start.bat` | `%*` 引数対応 |
-| `start_no_udp.bat` | 新規: UDP 無効で起動 |
-| `README.md` | FH6 UDP 振動機能のドキュメント追加 |
-| `docs/rumble_debug.md` | デバッグレポート v1 |
-| `docs/rumble_debug_v2.md` | デバッグレポート v2 |
-| `docs/fh6_rumble_udp_context.md` | ユーザーの詳細レポート |
-| `docs/development_log.md` | **本ファイル** |
+| `main.py` | エントリーポイント。UDP リスナー統合、`timeBeginPeriod(1)` |
+| `core/constants.py` | デバイス定数、初期化コマンド、振動パラメータ |
+| `core/controller_usb.py` | pyusb 通信。入力スレッド・振動送信（ep 0x01） |
+| `core/rumble_manager.py` | 振動状態管理。12ms 周期継続送信 |
+| `core/rumble_udp_listener.py` | FH6 UDP 受信・振動値計算。150ms ホールドタイム |
+| `core/input_parser.py` | HID レポートのボタン・スティック解析 |
+| `mapping/xbox360_mapper.py` | Switch → Xbox 360 ボタンマッピング |
+| `tools/rumble_comprehensive_test.py` | 全エンドポイント振動テスト（診断用） |
+| `tools/rumble_packet_test.py` | パケットオフセット検証テスト |
 
 ---
 
 ## 技術的な教訓
 
-1. **pywinusb + pyusb 共存**: pywinusb が HID デバイスを開くと pyusb の Bulk OUT が無効化される。ハイブリッド方式では Interface 1 を claim したままにする必要がある。
-2. **SDL のパケット長規則**: `cmd[5] + 8` バイトで送信。固定長送信では不十分。
-3. **ReadFlashBlock の重要性**: SDL は init 前に 5 つのフラッシュ読み取りを行う。これが rumble 有効化の前提条件の可能性がある。
-4. **Windows タイマー解像度**: `timeBeginPeriod(1)` がないと `time.sleep(0.001)` が 15ms になって入力遅延を生む。
-5. **ブロッキング vs コールバック**: pyusb の Interrupt IN はブロッキングで遅延を生む。pywinusb のコールバック方式が最適。
+1. **エンドポイントの確認が最優先**: 振動は Interface 0 Interrupt OUT（ep 0x01）。
+   Interface 1 Bulk OUT（ep 0x02）は初期化専用。`rumble_comprehensive_test.py` で
+   全パターンをテストして判明。
+
+2. **16進数と10進数の混同に注意**: SDL の `0x11` は 17（10進）。
+   コメントや変数名に hex を書く場合は `0x` プレフィックスを必ずつける。
+
+3. **Switch 2 Pro モーターは継続送信が必要**: パケットが止まると 100ms 以内にモーター停止。
+   XInput の force-feedback と同じ動作。値が変わらなくても 12ms ごとに送り続ける。
+
+4. **pyusb のみで完結可能**: pywinusb は不要。Interface 0/1 を libusbK で統一することで
+   入力・振動・初期化すべてを pyusb で安定して処理できる。
+
+5. **入力スレッド分離**: pyusb の blocking `dev.read()` をデーモンスレッドに移動し、
+   メインループはキューからノンブロッキングで取得することで入力遅延を防ぐ。
 
 ---
 
