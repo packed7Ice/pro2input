@@ -194,15 +194,22 @@ class Switch2ProControllerUSB:
             self._usb_device.write(
                 self._ep0_out, packet, timeout=_RUMBLE_TIMEOUT_MS
             )
+            self._rumble_fail_count = 0
             return True
         except usb.core.USBError as exc:
-            if exc.errno == 32:
+            self._rumble_fail_count = getattr(self, "_rumble_fail_count", 0) + 1
+            if exc.errno == 32:  # EPIPE: endpoint halted
                 try:
                     usb.util.clear_halt(self._usb_device, self._ep0_out)
                 except Exception:
                     pass
+            if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
+                print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
             return False
-        except Exception:
+        except Exception as exc:
+            self._rumble_fail_count = getattr(self, "_rumble_fail_count", 0) + 1
+            if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
+                print(f"[USB] Rumble write error (#{self._rumble_fail_count}): {exc}")
             return False
 
     def cleanup(self):

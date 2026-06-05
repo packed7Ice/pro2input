@@ -46,6 +46,7 @@ class FH6RumbleUDPListener(threading.Thread):
         slip_scale: float = 0.8,
         surface_scale: float = 1.0,
         timeout_ms: int = 300,
+        hold_ms: int = 150,
     ):
         super().__init__(daemon=True, name="FH6UDPListener")
         self.rumble_manager = rumble_manager
@@ -55,12 +56,18 @@ class FH6RumbleUDPListener(threading.Thread):
         self.slip_scale = slip_scale
         self.surface_scale = surface_scale
         self.timeout_sec = timeout_ms / 1000.0
+        self._hold_sec = hold_ms / 1000.0  # sustain rumble this long after drop to zero
 
         self._sock: socket.socket | None = None
         self._running = False
         self._last_packet_time = 0.0
         self._timed_out = True
         self._last_log_time = 0.0
+
+        # Hold state: keep last non-zero rumble for _hold_sec after value drops to zero
+        self._hold_large = 0
+        self._hold_small = 0
+        self._hold_until = 0.0
 
     def start(self):
         self._running = True
@@ -165,9 +172,19 @@ class FH6RumbleUDPListener(threading.Thread):
             large = int(surface_val * 255 * self.strength)
             large = max(0, min(255, large))
 
+        now = time.time()
+
+        # Hold: keep last non-zero rumble for _hold_sec to smooth out brief dips to zero
+        if large != 0 or small != 0:
+            self._hold_large = large
+            self._hold_small = small
+            self._hold_until = now + self._hold_sec
+        elif now < self._hold_until:
+            large = self._hold_large
+            small = self._hold_small
+
         self.rumble_manager.send_rumble(large, small)
 
-        now = time.time()
         if now - self._last_log_time >= 1.0:
             self._last_log_time = now
             print(
