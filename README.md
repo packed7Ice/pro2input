@@ -55,7 +55,14 @@ Dependencies: [pyusb](https://github.com/pyusb/pyusb), [vgamepad](https://github
 
 ### Usage
 
-Run the main converter:
+#### Option 1: Double-click to start (Easiest)
+
+Simply double-click **`start.bat`** in the project folder.
+
+A console window will open and the converter will start automatically.
+Press **Ctrl+C** in the window to stop.
+
+#### Option 2: Command line
 
 ```bash
 python main.py
@@ -65,6 +72,15 @@ The script will:
 1. Create a virtual Xbox 360 controller
 2. Find and initialize the Switch 2 Pro Controller
 3. Start the input loop with rumble feedback enabled
+
+#### Settings GUI
+
+Double-click **`settings.bat`** to open the configuration window,
+or run:
+
+```bash
+python tools/settings_ui.py
+```
 
 #### Rumble Test
 
@@ -82,6 +98,8 @@ python tools/xinput_rumble_test.py
 
 ```
 pro2input/
+├── start.bat                    # Double-click to launch converter
+├── settings.bat                 # Double-click to open settings GUI
 ├── main.py                      # Entry point
 ├── core/
 │   ├── constants.py             # Device IDs, init commands, rumble constants
@@ -184,7 +202,14 @@ pip install pyusb vgamepad
 
 ### 使い方
 
-メインの変換スクリプトを実行します：
+#### 方法1: ダブルクリックで起動（最も簡単）
+
+プロジェクトフォルダ内の **`start.bat`** をダブルクリックするだけで起動します。
+
+コンソールウィンドウが開き、自動的に変換が開始されます。
+停止するにはウィンドウ内で **Ctrl+C** を押してください。
+
+#### 方法2: コマンドライン
 
 ```bash
 python main.py
@@ -194,6 +219,15 @@ python main.py
 1. 仮想 Xbox 360 コントローラーの作成
 2. Switch 2 Pro コントローラーの検出と初期化
 3. 振動フィードバック付き入力ループの開始
+
+#### 設定 GUI
+
+**`settings.bat`** をダブルクリックで設定画面を開くか、
+以下を実行します：
+
+```bash
+python tools/settings_ui.py
+```
 
 #### 振動テスト
 
@@ -211,6 +245,8 @@ python tools/xinput_rumble_test.py
 
 ```
 pro2input/
+├── start.bat                    # ダブルクリックで変換を起動
+├── settings.bat                 # ダブルクリックで設定 GUI を開く
 ├── main.py                      # エントリーポイント
 ├── core/
 │   ├── constants.py             # デバイスID、初期化コマンド、振動定数
