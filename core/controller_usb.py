@@ -57,6 +57,8 @@ class Switch2ProControllerUSB:
         self._input_thread: threading.Thread | None = None
         self._running = False
         self._input_none_count = 0
+        self._rumble_fail_count = 0
+        self._disconnected = False
 
     def find_and_connect(self) -> bool:
         self._usb_device = usb.core.find(idVendor=TARGET_VID, idProduct=TARGET_PID)
@@ -149,10 +151,15 @@ class Switch2ProControllerUSB:
         except usb.core.USBError:
             pass
 
+    @property
+    def is_connected(self) -> bool:
+        return self._usb_device is not None and not self._disconnected
+
     def _input_loop(self):
         """
         Dedicated daemon thread: blocking Interrupt IN reads from Interface 0.
         Queues parsed payloads (Report ID stripped) for the main loop.
+        Sets _disconnected=True on fatal USB errors (device removed).
         """
         while self._running:
             try:
@@ -166,10 +173,11 @@ class Switch2ProControllerUSB:
                     except queue.Empty:
                         pass
                 self._input_queue.put_nowait(payload)
-            except usb.core.USBError:
-                pass
-            except Exception:
-                pass
+            except usb.core.USBError as exc:
+                # errno 19 = no such device, errno 5 = I/O error (device removed)
+                if exc.errno in (5, 19):
+                    self._disconnected = True
+                    break
 
     def read_input(self, timeout: int = 100) -> list | None:
         """Non-blocking: return the latest input payload, or None."""
@@ -197,7 +205,7 @@ class Switch2ProControllerUSB:
             self._rumble_fail_count = 0
             return True
         except usb.core.USBError as exc:
-            self._rumble_fail_count = getattr(self, "_rumble_fail_count", 0) + 1
+            self._rumble_fail_count += 1
             if exc.errno == 32:  # EPIPE: endpoint halted
                 try:
                     usb.util.clear_halt(self._usb_device, self._ep0_out)
@@ -207,7 +215,7 @@ class Switch2ProControllerUSB:
                 print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
             return False
         except Exception as exc:
-            self._rumble_fail_count = getattr(self, "_rumble_fail_count", 0) + 1
+            self._rumble_fail_count += 1
             if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
                 print(f"[USB] Rumble write error (#{self._rumble_fail_count}): {exc}")
             return False
@@ -229,3 +237,9 @@ class Switch2ProControllerUSB:
             except Exception:
                 pass
             self._usb_device = None
+
+        self._disconnected = False
+        self._ep0_in = None
+        self._ep0_out = None
+        self._ep_bulk_out = None
+        self._ep_bulk_in = None

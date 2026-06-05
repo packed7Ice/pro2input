@@ -12,114 +12,140 @@
 <a id="english"></a>
 ## English
 
-A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller** inputs to a virtual **Xbox 360 (XInput)** gamepad on Windows.
+A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller** inputs to a virtual **Xbox 360 (XInput)** gamepad on Windows, with full HD Rumble 2 haptic feedback driven by **Forza Horizon 6 UDP telemetry**.
 
 ### Features
 
 - **Full Button Mapping** — Face buttons, shoulder buttons, D-Pad, system buttons
 - **Analog Stick Support** — Both left and right sticks with correct axis polarity
 - **Trigger Synthesis** — ZL/ZR digital buttons mapped to analog LT/RT triggers
-- **HD Rumble 2 Feedback** — Experimental force-feedback support via SDL-derived protocol
-- **FH6 UDP Telemetry Rumble** — Forza Horizon 6 Data Out UDP support for force-feedback (bypasses virtual controller limitation)
-- **Modular Architecture** — Clean separation of USB transport, input parsing, and mapping layers
+- **HD Rumble 2 Feedback** — Vibration via Interface 0 Interrupt OUT (ep 0x01), SDL-derived protocol
+- **FH6 UDP Telemetry Rumble** — Forza Horizon 6 Data Out drives haptics (bypasses virtual controller limitation)
+- **Auto-Reconnect** — Automatically recovers when the controller is disconnected and reconnected
+- **Configurable via `config.json`** — Rumble strength, hold time, slip/surface scales and more
 
 ### Requirements
 
 - Windows 10/11
 - Python 3.10+
 - Nintendo Switch 2 Pro Controller (USB connection)
-- [ViGEmBus Driver](https://github.com/nefarius/ViGEmBus) (for virtual Xbox 360 controller)
-- [libusb-1.0.dll](https://libusb.info/) (placed in `C:\\Windows\\System32`)
-- [Zadig](https://zadig.akeo.ie/) (to install libusbK driver for Interface 1)
+- [ViGEmBus Driver](https://github.com/nefarius/ViGEmBus/releases) — virtual Xbox 360 controller
+- [libusb-1.0.dll](https://libusb.info/) — place in `C:\Windows\System32`
+- [Zadig](https://zadig.akeo.ie/) — install libusbK for Interface 0 **and** Interface 1
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-
-# Install Python dependencies
 pip install pyusb vgamepad
 ```
 
-Dependencies: [pyusb](https://github.com/pyusb/pyusb), [vgamepad](https://github.com/yannbouteiller/vgamepad)
-```
+### Driver Setup (Zadig) — Critical
 
-### Driver Setup (Zadig)
+> Both Interface 0 and Interface 1 must use **libusbK**. This is the most common setup mistake.
 
-1. Connect your Switch 2 Pro Controller via USB.
-2. Open Zadig, go to **Options → List All Devices**.
-3. Select **"Switch Pro Controller"** (or similar).
-4. For **Interface 1**, install the **libusbK** driver.
-5. **Keep Interface 0 on the Windows HID driver** (`HidUsb`) for rumble support.
+1. Connect the Switch 2 Pro Controller via USB.
+2. Open Zadig -> **Options -> List All Devices**.
+3. Select **Nintendo Switch Pro Controller (Interface 0)** -> install **libusbK**.
+4. Select **Nintendo Switch Pro Controller (Interface 1)** -> install **libusbK**.
+
+The app uses pyusb for all USB access. The Windows HID driver (HidUsb) is not needed.
 
 ### Usage
 
-#### Option 1: Double-click to start (Easiest)
+#### Quickstart
 
-Simply double-click **`start.bat`** in the project folder.
+Double-click **`start.bat`** — the converter starts with FH6 UDP rumble enabled.
 
-A console window will open and the converter will start automatically.
-Press **Ctrl+C** in the window to stop.
+To disable UDP telemetry rumble (use XInput events only):
 
-To disable FH6 UDP telemetry rumble, use **`start_no_udp.bat`** instead.
-
-#### Option 2: Command line
-
-```bash
-python main.py
+```bat
+start_no_udp.bat
 ```
 
-The script will:
-1. Create a virtual Xbox 360 controller
-2. Find and initialize the Switch 2 Pro Controller
-3. Start the input loop with rumble feedback enabled
+#### Command Line
 
-**Command-line options:**
-
-| Flag | Description |
-|------|-------------|
-| `--no-udp` | Disable FH6 UDP telemetry rumble (use XInput rumble only) |
+```bash
+python main.py           # default: UDP rumble enabled
+python main.py --no-udp  # XInput rumble only
+```
 
 #### Settings GUI
 
-Double-click **`settings.bat`** to open the configuration window,
-or run:
-
 ```bash
 python tools/settings_ui.py
+# or double-click settings.bat
 ```
 
-#### Rumble Test
+### Forza Horizon 6 Rumble Setup
 
-To verify rumble is working:
+FH6 does not send vibration data to virtual controllers (ViGEmBus limitation). This project receives FH6's **Data Out** UDP telemetry and drives the physical rumble motors directly.
 
+**In FH6:**
+1. Settings -> HUD & Gameplay -> **Data Out** -> ON
+2. **IP Address**: `127.0.0.1` (same PC)
+3. **Port**: `5301`
+
+Start `main.py` — UDP packets are received automatically and drive the motors.
+
+Verify packets are arriving:
 ```bash
-# Terminal 1: start the converter
-python main.py
-
-# Terminal 2: send test vibration
-python tools/xinput_rumble_test.py
+python tools/fh6_udp_debug.py
 ```
+
+### Configuration (`config.json`)
+
+```json
+{
+  "rumble": {
+    "enabled": true,
+    "strength": 1.0
+  },
+  "fh6_udp": {
+    "enabled": true,
+    "port": 5301,
+    "strength": 1.0,
+    "smashable_threshold": 3.0,
+    "slip_scale": 0.8,
+    "surface_scale": 1.0,
+    "timeout_ms": 300,
+    "hold_ms": 150
+  }
+}
+```
+
+| Key | Description |
+|-----|-------------|
+| `rumble.strength` | Overall rumble multiplier (0.0-2.0) |
+| `fh6_udp.strength` | UDP rumble multiplier (0.0-2.0) |
+| `fh6_udp.smashable_threshold` | Collision speed (m/s) to trigger full rumble |
+| `fh6_udp.slip_scale` | Tire slip -> high-frequency motor scale |
+| `fh6_udp.surface_scale` | Road surface -> low-frequency motor scale |
+| `fh6_udp.timeout_ms` | Silence motors if no UDP packet for this long |
+| `fh6_udp.hold_ms` | Sustain rumble for this long after value drops to zero |
 
 ### Project Structure
 
 ```
 pro2input/
-├── start.bat                    # Double-click to launch converter
-├── settings.bat                 # Double-click to open settings GUI
 ├── main.py                      # Entry point
+├── start.bat                    # Launch with UDP rumble
+├── start_no_udp.bat             # Launch without UDP rumble
+├── settings.bat                 # Open settings GUI
+├── config.json                  # User configuration
 ├── core/
-│   ├── constants.py             # Device IDs, init commands, rumble constants
-│   ├── controller_usb.py        # USB connection and HID I/O
-│   ├── input_parser.py           # Button/stick/trigger parsing
-│   └── rumble_manager.py         # XInput → Switch 2 Pro rumble conversion
+│   ├── constants.py             # USB constants, init commands, rumble packet spec
+│   ├── controller_usb.py        # pyusb I/O: input thread + rumble via ep 0x01
+│   ├── input_parser.py          # Button/stick/trigger parsing
+│   ├── rumble_manager.py        # Rumble state, 12ms periodic send, EncodeHDRumble
+│   └── rumble_udp_listener.py   # FH6 UDP telemetry -> rumble values
 ├── mapping/
-│   └── xbox360_mapper.py        # Virtual Xbox 360 gamepad mapping
-├── tools/                       # Test & diagnostic scripts
-├── docs/                        # Setup guides
-└── LICENSE                      # Apache 2.0
+│   └── xbox360_mapper.py        # Virtual Xbox 360 gamepad
+├── config/
+│   └── settings.py              # JSON config loader
+├── tools/                       # Diagnostic scripts
+└── docs/                        # Technical documentation
 ```
 
 ### Tools
@@ -128,160 +154,195 @@ pro2input/
 |--------|---------|
 | `tools/button_test.py` | Verify button mapping |
 | `tools/stick_raw_diagnostic.py` | Inspect raw stick values |
-| `tools/xinput_rumble_test.py` | Test XInput force-feedback |
-| `tools/rumble_hid_control_test.py` | Direct USB rumble debug |
-| `tools/fh6_udp_debug.py` | Standalone FH6 UDP packet inspector |
-| `tools/fh6_rumble_debug.py` | Log FH6 XInput rumble events (supports Xbox 360 / DS4 mode) |
-| `tools/settings_ui.py` | Launch GUI for button remapping and configuration |
+| `tools/xinput_rumble_test.py` | Send test vibration via XInput |
+| `tools/fh6_udp_debug.py` | Live FH6 UDP packet inspector |
+| `tools/fh6_rumble_debug.py` | Log FH6 XInput rumble events |
+| `tools/rumble_comprehensive_test.py` | Multi-endpoint rumble diagnostic |
+| `tools/settings_ui.py` | GUI for button remapping and config |
 
 ### Troubleshooting
 
 **Controller not found**
-- Ensure the controller is powered on and connected via USB.
-- Verify the libusbK driver is installed for Interface 1 via Zadig.
+- Confirm both Interface 0 and Interface 1 are libusbK in Zadig.
+- Reconnect the controller and retry.
 
 **No input in games**
-- Make sure `main.py` is running. The virtual controller only exists while the script is active.
-- Check that ViGEmBus is installed correctly.
+- `main.py` must be running — the virtual controller only exists while the script is active.
+- Confirm ViGEmBus is installed.
 
-**Rumble not working**
-- Ensure Interface 0 remains on the Windows HID driver (`HidUsb`).
-- Run `tools/xinput_rumble_test.py` while `main.py` is active.
+**No vibration**
+- Confirm both Interface 0 and Interface 1 are libusbK (not HidUsb or WinUSB).
+- Run `tools/rumble_comprehensive_test.py` to test endpoints directly.
+- For FH6: confirm Data Out is enabled and port is 5301. Check with `tools/fh6_udp_debug.py`.
 
-**Forza Horizon 6: no rumble in-game**
-- FH6 does **not** send vibration data to virtual controllers created by ViGEmBus, even in Xbox 360 or DS4 mode.
-- This is a known limitation of virtual gamepads with FH6, not a bug in this project.
-- **Solution:** Enable **Data Out** in FH6 settings and use the built-in UDP telemetry rumble feature:
-  1. In FH6, go to **Settings → HUD & Gameplay → Data Out** and set it to **ON**.
-  2. Set the **Data Out IP Address** to your PC's local IP (e.g., `127.0.0.1` for same machine).
-  3. Set the **Data Out Port** to `5301` (default; configurable in `config.json`).
-  4. Start `main.py` — UDP telemetry will drive rumble automatically.
-- Verify UDP packets are arriving with `tools/fh6_udp_debug.py`.
-- **Alternative:** Use Steam Input to present the controller as a generic gamepad, or use a physical Xbox controller via HidHide for rumble.
+**Vibration stops mid-game**
+- USB errors are logged as `[USB] Rumble write failed`. If you see these, re-check Zadig.
+- Increase `hold_ms` in `config.json` to 200-300 to smooth brief gaps.
+
+### Technical Notes
+
+Vibration packets are sent to **Interface 0 Interrupt OUT (ep 0x01)**, not Bulk OUT.
+This was discovered empirically via `tools/rumble_comprehensive_test.py`.
+
+Packet layout (64 bytes, SDL-derived):
+```
+[0]     = 0x02  (Report ID)
+[1]     = 0x50 | (seq & 0x0F)
+[2:7]   = left actuator (5-byte EncodeHDRumble)
+[17:23] = copy of [1:7]  (SDL: memcpy(&rumble_data[0x11], &rumble_data[0x01], 6))
+```
+
+The controller requires **continuous** 12ms packet delivery to sustain vibration.
 
 ### Acknowledgments
 
-- Rumble protocol derived from the official **[SDL](https://github.com/libsdl-org/SDL)** implementation ([`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)).
-- USB initialization sequence based on **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** by [ikz87](https://github.com/ikz87).
-- HID report structure references **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)** by dekuNukem.
+- Rumble protocol: **[SDL](https://github.com/libsdl-org/SDL)** [`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)
+- USB init sequence: **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** by ikz87
+- HID report structure: **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)** by dekuNukem
 
 ### License
 
-This project is licensed under the **Apache License 2.0**.
-See [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE).
 
 ---
 
 <a id="japanese"></a>
 ## 日本語
 
-**Nintendo Switch 2 Pro コントローラー**の入力を Windows 上で仮想 **Xbox 360（XInput）** ゲームパッドとして動作させる Python 製 USB 入力変換ツールです。
+**Nintendo Switch 2 Pro コントローラー**の入力を Windows 上で仮想 **Xbox 360（XInput）** ゲームパッドとして動作させる Python 製 USB 入力変換ツールです。**Forza Horizon 6 の UDP テレメトリ**を使った HD 振動2 フィードバックに対応しています。
 
 ### 機能
 
 - **フルボタンマッピング** — フェイスボタン、ショルダーボタン、十字キー、システムボタン
 - **アナログスティック対応** — 左右スティックともに正しい軸方向で動作
 - **トリガー合成** — ZL/ZR のデジタルボタンをアナログ LT/RT トリガーに変換
-- **HD 振動2 フィードバック** — SDL 導出プロトコルによる実験的な HD 振動2 対応
-- **FH6 UDP テレメトリ 振動** — Forza Horizon 6 の Data Out UDP による振動対応（仮想コントローラーの制限を回避）
-- **モジュール化アーキテクチャ** — USB 通信、入力解析、マッピングを明確に分離
+- **HD 振動2 フィードバック** — Interface 0 Interrupt OUT（ep 0x01）経由、SDL 導出プロトコル
+- **FH6 UDP テレメトリ振動** — Forza Horizon 6 の Data Out で振動モーターを直接駆動
+- **自動再接続** — コントローラーを抜き差しすると自動的に再接続
+- **`config.json` で設定可能** — 振動強度・ホールドタイム・スリップスケールなど
 
 ### 必要条件
 
 - Windows 10/11
 - Python 3.10 以降
 - Nintendo Switch 2 Pro コントローラー（USB 接続）
-- [ViGEmBus ドライバー](https://github.com/nefarius/ViGEmBus)（仮想 Xbox 360 コントローラー用）
-- [libusb-1.0.dll](https://libusb.info/)（`C:\\Windows\\System32` に配置）
-- [Zadig](https://zadig.akeo.ie/)（Interface 1 用 libusbK ドライバーインストール）
+- [ViGEmBus ドライバー](https://github.com/nefarius/ViGEmBus/releases) — 仮想 Xbox 360 コントローラー用
+- [libusb-1.0.dll](https://libusb.info/) — `C:\Windows\System32` に配置
+- [Zadig](https://zadig.akeo.ie/) — Interface 0 **と** Interface 1 の両方に libusbK をインストール
 
 ### インストール
 
 ```bash
-# リポジトリをクローン
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-
-# Python 依存関係をインストール
 pip install pyusb vgamepad
 ```
 
-依存ライブラリ: [pyusb](https://github.com/pyusb/pyusb), [vgamepad](https://github.com/yannbouteiller/vgamepad)
+### ドライバー設定（Zadig）— 重要
 
-### ドライバー設定（Zadig）
+> **Interface 0 と Interface 1 の両方**を libusbK にする必要があります。これが最も多い設定ミスです。
 
 1. Switch 2 Pro コントローラーを USB で接続します。
-2. Zadig を開き、**Options → List All Devices** を選択します。
-3. **"Switch Pro Controller"**（または類似の名前）を選択します。
-4. **Interface 1** に対して **libusbK** ドライバーをインストールします。
-5. **Interface 0 は Windows 標準 HID ドライバー（`HidUsb`）のままにします** — 振動機能のため必要です。
+2. Zadig を開き -> **Options -> List All Devices**。
+3. **Nintendo Switch Pro Controller (Interface 0)** を選択 -> **libusbK** をインストール。
+4. **Nintendo Switch Pro Controller (Interface 1)** を選択 -> **libusbK** をインストール。
+
+本アプリは全 USB アクセスに pyusb を使用します。Windows 標準 HID ドライバー（HidUsb）は不要です。
 
 ### 使い方
 
-#### 方法1: ダブルクリックで起動（最も簡単）
+#### 簡単起動
 
-プロジェクトフォルダ内の **`start.bat`** をダブルクリックするだけで起動します。
+**`start.bat`** をダブルクリック — FH6 UDP 振動が有効な状態で起動します。
 
-コンソールウィンドウが開き、自動的に変換が開始されます。
-停止するにはウィンドウ内で **Ctrl+C** を押してください。
+UDP テレメトリ振動を無効にする場合:
 
-FH6 UDP テレメトリ 振動を無効にする場合は **`start_no_udp.bat`** を使用してください。
-
-#### 方法2: コマンドライン
-
-```bash
-python main.py
+```bat
+start_no_udp.bat
 ```
 
-実行すると以下が行われます：
-1. 仮想 Xbox 360 コントローラーの作成
-2. Switch 2 Pro コントローラーの検出と初期化
-3. 振動フィードバック付き入力ループの開始
+#### コマンドライン
 
-**コマンドライン オプション：**
-
-| フラグ | 説明 |
-|--------|------|
-| `--no-udp` | FH6 UDP テレメトリ 振動を無効化（XInput 振動のみ使用） |
+```bash
+python main.py           # デフォルト: UDP 振動有効
+python main.py --no-udp  # XInput 振動のみ
+```
 
 #### 設定 GUI
 
-**`settings.bat`** をダブルクリックで設定画面を開くか、
-以下を実行します：
-
 ```bash
 python tools/settings_ui.py
+# または settings.bat をダブルクリック
 ```
 
-#### 振動テスト
+### Forza Horizon 6 振動の設定
 
-振動が動作するか確認するには：
+FH6 は ViGEmBus 仮想コントローラーに振動データを送りません（仮想コントローラーの制限）。本プロジェクトは FH6 の **Data Out** UDP テレメトリを受信し、物理的な振動モーターを直接制御します。
 
+**FH6 内での設定:**
+1. 設定 -> HUD & ゲームプレイ -> **Data Out** -> ON
+2. **IP アドレス**: `127.0.0.1`（同じ PC の場合）
+3. **ポート**: `5301`
+
+`main.py` を起動すると UDP パケットを自動受信し、モーターを制御します。
+
+パケットが届いているか確認:
 ```bash
-# ターミナル 1: 変換スクリプトを起動
-python main.py
-
-# ターミナル 2: テスト振動を送信
-python tools/xinput_rumble_test.py
+python tools/fh6_udp_debug.py
 ```
+
+### 設定（`config.json`）
+
+```json
+{
+  "rumble": {
+    "enabled": true,
+    "strength": 1.0
+  },
+  "fh6_udp": {
+    "enabled": true,
+    "port": 5301,
+    "strength": 1.0,
+    "smashable_threshold": 3.0,
+    "slip_scale": 0.8,
+    "surface_scale": 1.0,
+    "timeout_ms": 300,
+    "hold_ms": 150
+  }
+}
+```
+
+| キー | 説明 |
+|------|------|
+| `rumble.strength` | 全体の振動強度倍率（0.0〜2.0） |
+| `fh6_udp.strength` | UDP 振動の強度倍率（0.0〜2.0） |
+| `fh6_udp.smashable_threshold` | 衝突振動を発生させる速度差（m/s） |
+| `fh6_udp.slip_scale` | タイヤスリップ -> 高周波モーターのスケール |
+| `fh6_udp.surface_scale` | 路面振動 -> 低周波モーターのスケール |
+| `fh6_udp.timeout_ms` | この時間（ms）UDP が来なければモーターを停止 |
+| `fh6_udp.hold_ms` | 振動値がゼロになってもこの時間（ms）は振動を持続 |
 
 ### プロジェクト構成
 
 ```
 pro2input/
-├── start.bat                    # ダブルクリックで変換を起動
-├── settings.bat                 # ダブルクリックで設定 GUI を開く
 ├── main.py                      # エントリーポイント
+├── start.bat                    # UDP 振動あり起動
+├── start_no_udp.bat             # UDP 振動なし起動
+├── settings.bat                 # 設定 GUI を開く
+├── config.json                  # ユーザー設定
 ├── core/
-│   ├── constants.py             # デバイスID、初期化コマンド、振動定数
-│   ├── controller_usb.py        # USB接続とHID入出力
-│   ├── input_parser.py           # ボタン・スティック・トリガー解析
-│   └── rumble_manager.py         # XInput → Switch 2 Pro 振動変換
+│   ├── constants.py             # USB 定数・初期化コマンド・振動パケット仕様
+│   ├── controller_usb.py        # pyusb I/O: 入力スレッド + ep 0x01 振動送信
+│   ├── input_parser.py          # ボタン・スティック・トリガー解析
+│   ├── rumble_manager.py        # 振動状態管理・12ms 周期送信・EncodeHDRumble
+│   └── rumble_udp_listener.py   # FH6 UDP テレメトリ -> 振動値変換
 ├── mapping/
-│   └── xbox360_mapper.py        # 仮想 Xbox 360 ゲームパッドマッピング
-├── tools/                       # テスト・診断スクリプト群
-├── docs/                        # セットアップガイド
-└── LICENSE                      # Apache 2.0
+│   └── xbox360_mapper.py        # 仮想 Xbox 360 ゲームパッド
+├── config/
+│   └── settings.py              # JSON 設定ローダー
+├── tools/                       # 診断スクリプト群
+└── docs/                        # 技術ドキュメント
 ```
 
 ### ツール一覧
@@ -290,44 +351,52 @@ pro2input/
 |------------|------|
 | `tools/button_test.py` | ボタンマッピングの確認 |
 | `tools/stick_raw_diagnostic.py` | スティック生値の確認 |
-| `tools/xinput_rumble_test.py` | XInput 振動のテスト |
-| `tools/rumble_hid_control_test.py` | USB 直振動デバッグ |
-| `tools/fh6_udp_debug.py` | FH6 UDP パケットの単体検証ツール |
-| `tools/fh6_rumble_debug.py` | FH6 の XInput 振動イベントを記録（Xbox 360 / DS4 両対応） |
-| `tools/settings_ui.py` | ボタンリマッピング・設定 GUI の起動 |
+| `tools/xinput_rumble_test.py` | XInput で振動テスト送信 |
+| `tools/fh6_udp_debug.py` | FH6 UDP パケットのリアルタイム確認 |
+| `tools/fh6_rumble_debug.py` | FH6 XInput 振動イベントのログ記録 |
+| `tools/rumble_comprehensive_test.py` | 全エンドポイント振動診断 |
+| `tools/settings_ui.py` | ボタンリマッピング・設定 GUI |
 
 ### トラブルシューティング
 
 **コントローラーが認識されない**
-- コントローラーの電源が入り、USB で接続されていることを確認してください。
-- Zadig で Interface 1 に libusbK ドライバーがインストールされているか確認してください。
+- Zadig で Interface 0 と Interface 1 の両方が libusbK になっているか確認してください。
+- コントローラーを抜き差しして再試行してください。
 
 **ゲーム内で入力が効かない**
-- `main.py` が実行中であることを確認してください。仮想コントローラーはスクリプト実行中のみ存在します。
+- `main.py` が実行中であることを確認してください（スクリプト実行中のみ仮想コントローラーが存在）。
 - ViGEmBus が正しくインストールされているか確認してください。
 
 **振動しない**
-- Interface 0 が Windows 標準 HID ドライバー（`HidUsb`）のままであることを確認してください。
-- `main.py` 実行中に `tools/xinput_rumble_test.py` を実行してみてください。
+- Zadig で Interface 0 と Interface 1 の両方が **libusbK**（HidUsb や WinUSB ではない）か確認してください。
+- `tools/rumble_comprehensive_test.py` でエンドポイントを直接テストしてください。
+- FH6 の場合: Data Out が有効でポートが 5301 か確認。`tools/fh6_udp_debug.py` で確認できます。
 
-**Forza Horizon 6 でゲーム内で振動しない**
-- FH6 は **ViGEmBus による仮想コントローラー（Xbox 360 / DS4 両方）に振動データを送信しません**。
-- これは仮想ゲームパッドの既知の限界であり、本プロジェクトのバグではありません。
-- **解決策:** FH6 設定で **Data Out（データ出力）** を有効化し、内蔵の UDP テレメトリ 振動機能を使用します：
-  1. FH6 内で **設定 → HUD & ゲームプレイ → Data Out** を **ON** に設定します。
-  2. **Data Out IP アドレス** を PC のローカル IP に設定します（同じ PC の場合は `127.0.0.1`）。
-  3. **Data Out ポート** を `5301` に設定します（デフォルト；`config.json` で変更可能）。
-  4. `main.py` を起動すると、UDP テレメトリが自動的に振動を制御します。
-- UDP パケットが届いているかは `tools/fh6_udp_debug.py` で確認できます。
-- **その他の回避策:** Steam Input を使ってコントローラーを汎用ゲームパッドとして認識させるか、HidHide を使って物理 Xbox コントローラーのみを使用する。
+**振動がゲーム中に止まる**
+- USB エラーは `[USB] Rumble write failed` としてログに出ます。出ている場合は Zadig の設定を再確認してください。
+- `config.json` の `hold_ms` を 200〜300 に増やすと短い振動の途切れが改善されます。
+
+### 技術メモ
+
+振動パケットは **Interface 0 Interrupt OUT（ep 0x01）** に送信します（Bulk OUT ではありません）。
+`tools/rumble_comprehensive_test.py` の実験により判明しました。
+
+パケットレイアウト（64 バイト、SDL 準拠）:
+```
+[0]     = 0x02  (Report ID)
+[1]     = 0x50 | (seq & 0x0F)
+[2:7]   = 左アクチュエータ（5 バイト EncodeHDRumble）
+[17:23] = [1:7] のコピー（SDL: memcpy(&rumble_data[0x11], &rumble_data[0x01], 6)）
+```
+
+コントローラーのモーターは **12ms ごとに継続的にパケットを送り続けないと停止**します。
 
 ### 謝辞
 
-- 振動プロトコルは公式 **[SDL](https://github.com/libsdl-org/SDL)** 実装（[`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)）から導出しました。
-- USB 初期化シーケンスは [ikz87](https://github.com/ikz87) 氏の **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** を参考にしました。
-- HID レポート構造の参考: **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)**（dekuNukem）
+- 振動プロトコル: **[SDL](https://github.com/libsdl-org/SDL)** [`SDL_hidapi_switch2.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/hidapi/SDL_hidapi_switch2.c)
+- USB 初期化シーケンス: **[NSW2-controller-enabler](https://github.com/ikz87/NSW2-controller-enabler)** by ikz87
+- HID レポート構造: **[Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering)** by dekuNukem
 
 ### ライセンス
 
-このプロジェクトは **Apache License 2.0** の下でライセンスされています。
-詳細は [LICENSE](LICENSE) をご覧ください。
+Apache License 2.0 — [LICENSE](LICENSE) を参照してください。

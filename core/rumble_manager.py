@@ -45,9 +45,11 @@ class RumbleManager:
         self._active_large = 0
         self._active_small = 0
 
-        # Last physically sent values (to know when to send neutral)
+        # Last physically sent values (to detect transition to zero for neutral packet)
         self._sent_large = 0
         self._sent_small = 0
+
+        self._rumble_fail_count = 0
 
         self._last_send_time = 0.0
 
@@ -58,7 +60,13 @@ class RumbleManager:
         pass
 
     def stop(self):
+        """Silence motors and reset active state so drain_and_send() doesn't restart them."""
+        with self._lock:
+            self._active_large = 0
+            self._active_small = 0
         self._send_packet(self._build_neutral_packet())
+        self._sent_large = 0
+        self._sent_small = 0
 
     def drain_and_send(self):
         """

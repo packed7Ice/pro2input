@@ -127,6 +127,9 @@ class FH6RumbleUDPListener(threading.Thread):
         # IsRaceOn (s32) at offset 0
         is_race_on = struct.unpack_from("<i", data, _OFF_IS_RACE_ON)[0]
         if is_race_on == 0:
+            self._hold_large = 0
+            self._hold_small = 0
+            self._hold_until = 0.0
             self.rumble_manager.send_rumble(0, 0)
             return
 

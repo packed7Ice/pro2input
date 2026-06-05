@@ -90,7 +90,8 @@ def main():
             udp_timeout = settings.get("fh6_udp.timeout_ms", 300)
             print(f"\n[INFO] Starting FH6 UDP telemetry listener on port {udp_port}...")
             try:
-                udp_listener = FH6RumbleUDPListener(
+                udp_hold = settings.get("fh6_udp.hold_ms", 150)
+            udp_listener = FH6RumbleUDPListener(
                     rumble,
                     port=udp_port,
                     strength=udp_strength,
@@ -98,6 +99,7 @@ def main():
                     slip_scale=udp_slip,
                     surface_scale=udp_surface,
                     timeout_ms=udp_timeout,
+                    hold_ms=udp_hold,
                 )
                 udp_listener.start()
                 rumble.ignore_xinput = True
@@ -114,7 +116,7 @@ def main():
     print("\n[INFO] Starting input loop. Press Ctrl+C to stop.")
     print("[INFO] Open your game and enjoy!\n")
 
-    # Step 4: Input loop
+    # Step 4: Input loop with auto-reconnect
     try:
         while True:
             if rumble:
@@ -122,6 +124,26 @@ def main():
             payload = controller.read_input(timeout=100)
             if payload is not None:
                 mapper.update_from_payload(payload)
+
+            # Auto-reconnect when controller is physically disconnected
+            if not controller.is_connected:
+                print("\n[WARN] Controller disconnected. Waiting for reconnect...")
+                if rumble:
+                    rumble.stop()
+                mapper.reset()
+                controller.cleanup()
+                retry_delay = 1.0
+                while True:
+                    time.sleep(retry_delay)
+                    if controller.find_and_connect():
+                        try:
+                            controller.initialize_hid_mode()
+                            print("[OK ] Controller reconnected.")
+                            break
+                        except Exception as e:
+                            print(f"[WARN] Reconnect init failed: {e}")
+                    retry_delay = min(retry_delay * 1.5, 10.0)
+
             time.sleep(0.001)  # yield CPU ~1ms
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user.")

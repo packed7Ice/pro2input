@@ -54,6 +54,7 @@ DEFAULT_CONFIG = {
         "slip_scale": 0.8,
         "surface_scale": 1.0,
         "timeout_ms": 300,
+        "hold_ms": 150,
     },
 }
 
