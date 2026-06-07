@@ -206,18 +206,24 @@ class Switch2ProControllerUSB:
             return True
         except usb.core.USBError as exc:
             self._rumble_fail_count += 1
-            if exc.errno == 32:  # EPIPE: endpoint halted
-                try:
-                    usb.util.clear_halt(self._usb_device, self._ep0_out)
-                except Exception:
-                    pass
+            # Attempt endpoint recovery on any error (not just EPIPE)
+            try:
+                usb.util.clear_halt(self._usb_device, self._ep0_out)
+            except Exception:
+                pass
             if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
                 print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
+            if self._rumble_fail_count >= 15:
+                print("[USB] Rumble endpoint unrecoverable — triggering reconnect")
+                self._disconnected = True
             return False
         except Exception as exc:
             self._rumble_fail_count += 1
             if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
                 print(f"[USB] Rumble write error (#{self._rumble_fail_count}): {exc}")
+            if self._rumble_fail_count >= 15:
+                print("[USB] Rumble endpoint unrecoverable — triggering reconnect")
+                self._disconnected = True
             return False
 
     def cleanup(self):
@@ -239,6 +245,7 @@ class Switch2ProControllerUSB:
             self._usb_device = None
 
         self._disconnected = False
+        self._rumble_fail_count = 0
         self._ep0_in = None
         self._ep0_out = None
         self._ep_bulk_out = None
