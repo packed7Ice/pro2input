@@ -108,15 +108,6 @@ class Switch2ProControllerUSB:
             except usb.core.USBError:
                 pass
 
-        # ---- Clear stall on rumble endpoint (must be after claim_interface) ----
-        # On Windows/libusbK a STALL from a previous session persists across
-        # reconnects. Clearing it here ensures ep 0x01 is ready before any write.
-        try:
-            usb.util.clear_halt(self._usb_device, self._ep0_out)
-            time.sleep(0.02)  # give device time to process the CLEAR_FEATURE request
-        except Exception:
-            pass
-
         # ---- Send ReadFlashBlock commands (before init, per SDL) ----
         for flash_cmd in READ_FLASH_COMMANDS:
             self._bulk_write(flash_cmd)
@@ -207,6 +198,10 @@ class Switch2ProControllerUSB:
         """
         if self._usb_device is None or self._ep0_out is None or self._disconnected:
             return False
+        # After 50 consecutive failures, suspend rumble for this session.
+        # Do NOT trigger reconnect — input is still working; only rumble is broken.
+        if self._rumble_fail_count >= 50:
+            return False
         try:
             self._usb_device.write(
                 self._ep0_out, packet, timeout=_RUMBLE_TIMEOUT_MS
@@ -220,19 +215,17 @@ class Switch2ProControllerUSB:
                     usb.util.clear_halt(self._usb_device, self._ep0_out)
                 except Exception:
                     pass
-            if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
+            if self._rumble_fail_count <= 3:
                 print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
-            if self._rumble_fail_count >= 15:
-                print("[USB] Rumble endpoint unrecoverable — triggering reconnect")
-                self._disconnected = True
+            elif self._rumble_fail_count == 50:
+                print("[USB] Rumble suspended (persistent errors). Input unaffected.")
             return False
         except Exception as exc:
             self._rumble_fail_count += 1
-            if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
+            if self._rumble_fail_count <= 3:
                 print(f"[USB] Rumble write error (#{self._rumble_fail_count}): {exc}")
-            if self._rumble_fail_count >= 15:
-                print("[USB] Rumble endpoint unrecoverable — triggering reconnect")
-                self._disconnected = True
+            elif self._rumble_fail_count == 50:
+                print("[USB] Rumble suspended (persistent errors). Input unaffected.")
             return False
 
     def cleanup(self):
