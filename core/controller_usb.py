@@ -87,14 +87,6 @@ class Switch2ProControllerUSB:
                 f"Interface 0 missing endpoints: IN={self._ep0_in} OUT={self._ep0_out}"
             )
 
-        # Clear any stall on the rumble endpoint left over from a previous session.
-        # Without this, the first write after reconnect times out (Windows returns
-        # errno 10060 instead of errno 32 for a stall inherited across sessions).
-        try:
-            usb.util.clear_halt(self._usb_device, self._ep0_out)
-        except Exception:
-            pass
-
         # ---- Discover Interface 1 endpoints ----
         intf1 = usb.util.find_descriptor(cfg, bInterfaceNumber=USB_INTERFACE_NUMBER)
         if intf1 is None:
@@ -115,6 +107,15 @@ class Switch2ProControllerUSB:
                 usb.util.claim_interface(self._usb_device, intf_num)
             except usb.core.USBError:
                 pass
+
+        # ---- Clear stall on rumble endpoint (must be after claim_interface) ----
+        # On Windows/libusbK a STALL from a previous session persists across
+        # reconnects. Clearing it here ensures ep 0x01 is ready before any write.
+        try:
+            usb.util.clear_halt(self._usb_device, self._ep0_out)
+            time.sleep(0.02)  # give device time to process the CLEAR_FEATURE request
+        except Exception:
+            pass
 
         # ---- Send ReadFlashBlock commands (before init, per SDL) ----
         for flash_cmd in READ_FLASH_COMMANDS:
@@ -204,7 +205,7 @@ class Switch2ProControllerUSB:
         Send a 64-byte rumble packet via Interface 0 Interrupt OUT (ep 0x01).
         Rumble must go to the HID interrupt endpoint, NOT Interface 1 Bulk OUT.
         """
-        if self._usb_device is None or self._ep0_out is None:
+        if self._usb_device is None or self._ep0_out is None or self._disconnected:
             return False
         try:
             self._usb_device.write(
