@@ -1,8 +1,12 @@
 # scripts/finish-fix.ps1
-# Usage: .\scripts\finish-fix.ps1
+# Usage: .\scripts\finish-fix.ps1 ["PR title"]
 #
-# Merges the current fix/* branch into main, pushes, and deletes the fix branch.
-# Run this only after confirming the fix works correctly.
+# Pushes the current fix/* branch and opens a Pull Request to main.
+# Merge on GitHub after confirming the fix works.
+
+param(
+    [string]$Title = ""
+)
 
 $branch = git rev-parse --abbrev-ref HEAD
 if (-not $branch.StartsWith("fix/")) {
@@ -10,27 +14,20 @@ if (-not $branch.StartsWith("fix/")) {
     exit 1
 }
 
-Write-Host "Merging '$branch' into main..." -ForegroundColor Cyan
-
-# Switch to main and merge
-git checkout main
-if (-not $?) { exit 1 }
-
-git pull origin main
-if (-not $?) { exit 1 }
-
-git merge --no-ff $branch -m "Merge $branch into main"
-if (-not $?) {
-    Write-Host "Merge conflict. Resolve conflicts, then push manually." -ForegroundColor Red
-    exit 1
+# Derive default PR title from branch name
+if ($Title -eq "") {
+    $Title = $branch -replace "^fix/", "" -replace "-", " "
+    $Title = "fix: $Title"
 }
 
-git push origin main
+# Push fix branch to remote
+git push -u origin $branch
 if (-not $?) { exit 1 }
 
-# Delete fix branch locally and on remote
-git branch -d $branch
-git push origin --delete $branch 2>$null
+# Open PR to main
+gh pr create --base main --head $branch --title $Title --body ""
+if (-not $?) { exit 1 }
 
 Write-Host ""
-Write-Host "Done. '$branch' merged and deleted." -ForegroundColor Green
+Write-Host "PR created. Review and merge on GitHub, then run:" -ForegroundColor Green
+Write-Host "  git checkout main && git pull origin main && git branch -d $branch" -ForegroundColor Cyan

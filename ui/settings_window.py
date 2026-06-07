@@ -130,9 +130,6 @@ class SettingsWindow:
 
         ttk.Label(parent, text="1.0 = normal, 0.0 = off, 2.0 = double strength", foreground="gray").pack(anchor="w", padx=10)
 
-        ttk.Label(parent, text="Note: Forza Horizon 6 (Game Pass) does not send\n"
-                                "vibration to virtual controllers.",
-                  foreground="gray").pack(anchor="w", pady=20, padx=10)
 
     def _on_save(self):
         # Save button mapping
