@@ -87,6 +87,14 @@ class Switch2ProControllerUSB:
                 f"Interface 0 missing endpoints: IN={self._ep0_in} OUT={self._ep0_out}"
             )
 
+        # Clear any stall on the rumble endpoint left over from a previous session.
+        # Without this, the first write after reconnect times out (Windows returns
+        # errno 10060 instead of errno 32 for a stall inherited across sessions).
+        try:
+            usb.util.clear_halt(self._usb_device, self._ep0_out)
+        except Exception:
+            pass
+
         # ---- Discover Interface 1 endpoints ----
         intf1 = usb.util.find_descriptor(cfg, bInterfaceNumber=USB_INTERFACE_NUMBER)
         if intf1 is None:
@@ -206,11 +214,11 @@ class Switch2ProControllerUSB:
             return True
         except usb.core.USBError as exc:
             self._rumble_fail_count += 1
-            # Attempt endpoint recovery on any error (not just EPIPE)
-            try:
-                usb.util.clear_halt(self._usb_device, self._ep0_out)
-            except Exception:
-                pass
+            if exc.errno == 32:  # EPIPE: endpoint halted
+                try:
+                    usb.util.clear_halt(self._usb_device, self._ep0_out)
+                except Exception:
+                    pass
             if self._rumble_fail_count <= 3 or self._rumble_fail_count % 50 == 0:
                 print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
             if self._rumble_fail_count >= 15:
