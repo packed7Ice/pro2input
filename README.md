@@ -14,6 +14,45 @@
 
 A Python-based USB input converter that maps **Nintendo Switch 2 Pro Controller** inputs to a virtual **Xbox 360 (XInput)** gamepad on Windows, with full HD Rumble 2 haptic feedback driven by **Forza Horizon 6 UDP telemetry**.
 
+### Processing Flow
+
+```mermaid
+flowchart LR
+    SW2["Switch 2 Pro Controller\n(USB)"]
+
+    subgraph app["pro2input"]
+        direction TB
+        subgraph input_path["Input Path · main thread"]
+            USB_IN["controller_usb.py\nInput Thread · ep 0x81"]
+            PARSER["input_parser.py\nbuttons / sticks / triggers"]
+            MAPPER["xbox360_mapper.py"]
+            KBD["keyboard_mapper.py"]
+        end
+        subgraph rumble_path["Rumble Path"]
+            UDP_L["rumble_udp_listener.py\nUDP Thread · :5301"]
+            RMGR["rumble_manager.py\n12 ms periodic send"]
+            USB_OUT["controller_usb.py\nep 0x01 OUT"]
+        end
+    end
+
+    VPAD["Virtual Xbox 360\n(ViGEmBus)"]
+    KBOS["OS Keyboard\n(pynput)"]
+    FH6["Forza Horizon 6\nData Out · UDP :5301"]
+
+    SW2 -->|"HID report"| USB_IN
+    USB_IN --> PARSER
+    PARSER --> MAPPER
+    PARSER -->|"unmapped buttons"| KBD
+    MAPPER --> VPAD
+    KBD --> KBOS
+
+    FH6 -->|"telemetry"| UDP_L
+    UDP_L -->|"large / small"| RMGR
+    VPAD -->|"XInput rumble\n(fallback)"| RMGR
+    RMGR --> USB_OUT
+    USB_OUT -->|"HD Rumble 2 · 64 bytes"| SW2
+```
+
 ### Features
 
 - **Full Button Mapping** — Face buttons, shoulder buttons, D-Pad, system buttons
@@ -248,6 +287,45 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## 日本語
 
 **Nintendo Switch 2 Pro コントローラー**の入力を Windows 上で仮想 **Xbox 360（XInput）** ゲームパッドとして動作させる Python 製 USB 入力変換ツールです。**Forza Horizon 6 の UDP テレメトリ**を使った HD 振動2 フィードバックに対応しています。
+
+### 処理フロー
+
+```mermaid
+flowchart LR
+    SW2["Switch 2 Pro Controller\n(USB)"]
+
+    subgraph app["pro2input"]
+        direction TB
+        subgraph input_path["入力パス · メインスレッド"]
+            USB_IN["controller_usb.py\nInput Thread · ep 0x81"]
+            PARSER["input_parser.py\nボタン / スティック / トリガー"]
+            MAPPER["xbox360_mapper.py"]
+            KBD["keyboard_mapper.py"]
+        end
+        subgraph rumble_path["振動パス"]
+            UDP_L["rumble_udp_listener.py\nUDP スレッド · :5301"]
+            RMGR["rumble_manager.py\n12ms 周期送信"]
+            USB_OUT["controller_usb.py\nep 0x01 OUT"]
+        end
+    end
+
+    VPAD["仮想 Xbox 360\n(ViGEmBus)"]
+    KBOS["OS キーボード\n(pynput)"]
+    FH6["Forza Horizon 6\nData Out · UDP :5301"]
+
+    SW2 -->|"HID レポート"| USB_IN
+    USB_IN --> PARSER
+    PARSER --> MAPPER
+    PARSER -->|"未割り当てボタン"| KBD
+    MAPPER --> VPAD
+    KBD --> KBOS
+
+    FH6 -->|"テレメトリ"| UDP_L
+    UDP_L -->|"large / small"| RMGR
+    VPAD -->|"XInput 振動\n(フォールバック)"| RMGR
+    RMGR --> USB_OUT
+    USB_OUT -->|"HD Rumble 2 · 64 bytes"| SW2
+```
 
 ### 機能
 
