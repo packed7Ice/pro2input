@@ -58,6 +58,7 @@ class Switch2ProControllerUSB:
         self._running = False
         self._input_none_count = 0
         self._rumble_fail_count = 0
+        self._rumble_backoff_until = 0.0  # epoch time; skip writes until this passes
         self._disconnected = False
 
     def find_and_connect(self) -> bool:
@@ -202,6 +203,10 @@ class Switch2ProControllerUSB:
         # Do NOT trigger reconnect — input is still working; only rumble is broken.
         if self._rumble_fail_count >= 50:
             return False
+        # After a STALL + clear_halt, wait for the device to recover before retrying.
+        # Writes during backoff are silently skipped (fail count does not increment).
+        if time.time() < self._rumble_backoff_until:
+            return False
         try:
             self._usb_device.write(
                 self._ep0_out, packet, timeout=_RUMBLE_TIMEOUT_MS
@@ -210,11 +215,13 @@ class Switch2ProControllerUSB:
             return True
         except usb.core.USBError as exc:
             self._rumble_fail_count += 1
-            if exc.errno == 32:  # EPIPE: endpoint halted
+            if exc.errno == 32:  # EPIPE: endpoint halted — clear and back off 500ms
                 try:
                     usb.util.clear_halt(self._usb_device, self._ep0_out)
                 except Exception:
                     pass
+                self._rumble_backoff_until = time.time() + 0.5
+                print(f"[USB] Rumble STALL — cleared halt, backing off 500ms")
             if self._rumble_fail_count <= 3:
                 print(f"[USB] Rumble write failed (#{self._rumble_fail_count}): {exc}")
             elif self._rumble_fail_count == 50:
@@ -248,6 +255,7 @@ class Switch2ProControllerUSB:
 
         self._disconnected = False
         self._rumble_fail_count = 0
+        self._rumble_backoff_until = 0.0
         self._ep0_in = None
         self._ep0_out = None
         self._ep_bulk_out = None
