@@ -22,7 +22,7 @@ SDL data offsets (from HandleSwitchProState):
 """
 
 from core.constants import (
-    STICK_MAX_RAW, STICK_CENTER, STICK_SCALE,
+    STICK_CENTER, STICK_SCALE, STICK_SATURATION_MARGIN,
     TRIGGER_DIGITAL_ON, TRIGGER_DIGITAL_OFF,
 )
 
@@ -34,10 +34,41 @@ def unpack_12bit_triplet(data: list) -> tuple[int, int]:
     return a, b
 
 
-def normalize_stick(value: int, max_raw: int = STICK_MAX_RAW) -> int:
-    """Convert raw 12-bit value to signed 16-bit (-32768 to 32767)."""
-    center = max_raw / 2
-    return int((value - center) / center * STICK_SCALE)
+class AxisCalibrator:
+    """
+    Auto-calibrates one stick axis at runtime.
+
+    Physical stick travel rarely reaches the theoretical raw 0/4095
+    endpoints, so a fixed ideal-range normalization leaves max tilt short
+    of full scale. This tracks the largest deflection seen so far on each
+    side of center and saturates readings within STICK_SATURATION_MARGIN
+    of that deflection to +/-32767.
+    """
+
+    def __init__(self, center: float = STICK_CENTER, margin: float = STICK_SATURATION_MARGIN):
+        self.center = center
+        self.margin = margin
+        self._pos_extreme = 1.0
+        self._neg_extreme = 1.0
+
+    def normalize(self, raw_value: int) -> int:
+        delta = raw_value - self.center
+        if delta >= 0:
+            self._pos_extreme = max(self._pos_extreme, delta)
+            scale = self._pos_extreme * self.margin
+        else:
+            delta = -delta
+            self._neg_extreme = max(self._neg_extreme, delta)
+            scale = self._neg_extreme * self.margin
+
+        norm = min(1.0, delta / scale)
+        return int(norm * STICK_SCALE) if raw_value >= self.center else -int(norm * STICK_SCALE)
+
+
+_lx_cal = AxisCalibrator()
+_ly_cal = AxisCalibrator()
+_rx_cal = AxisCalibrator()
+_ry_cal = AxisCalibrator()
 
 
 def parse_buttons(payload: list) -> dict[str, bool]:
@@ -81,10 +112,10 @@ def parse_sticks(payload: list) -> tuple[int, int, int, int]:
     lx_raw, ly_raw = unpack_12bit_triplet(payload[10:13])
     rx_raw, ry_raw = unpack_12bit_triplet(payload[13:16])
 
-    lx = normalize_stick(lx_raw)
-    ly = normalize_stick(ly_raw)
-    rx = normalize_stick(rx_raw)
-    ry = normalize_stick(ry_raw)
+    lx = _lx_cal.normalize(lx_raw)
+    ly = _ly_cal.normalize(ly_raw)
+    rx = _rx_cal.normalize(rx_raw)
+    ry = _ry_cal.normalize(ry_raw)
 
     return lx, ly, rx, ry
 
