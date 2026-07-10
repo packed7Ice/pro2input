@@ -77,6 +77,13 @@ STICK_MAX_RAW = 4095
 STICK_CENTER = STICK_MAX_RAW / 2
 STICK_SCALE = 32767
 
+# Physical stick travel rarely reaches the theoretical raw 0/4095 endpoints
+# (mechanical stop short of ADC saturation). Axes auto-calibrate their
+# observed min/max at runtime; this margin lets readings within
+# `margin` of the largest deflection seen so far saturate to full scale,
+# so max tilt reliably reaches +/-32767 after a couple of full swings.
+STICK_SATURATION_MARGIN = 0.92
+
 # Switch 2 Pro reports ZL/ZR as digital buttons only.
 # We synthesize analog trigger values from button states.
 TRIGGER_DIGITAL_ON = 255

@@ -1,124 +1,66 @@
+"""
+Stick raw value diagnostic — uses the SAME production connect/init path as
+main.py (core.controller_usb.Switch2ProControllerUSB) so the byte offsets
+match exactly what the real app sees.
+"""
 import sys
 import time
-import usb.core
-import usb.util
 
-# ---------------------------------------------------------------------------
-#  Switch 2 Pro Controller Stick Raw Value Diagnostic
-#  Shows raw 12-bit stick values to determine axis polarity
-# ---------------------------------------------------------------------------
+sys.path.insert(0, ".")
 
-TARGET_VID = 0x057E
-TARGET_PID = 0x2069
-USB_INTERFACE_NUMBER = 1
-
-INIT_COMMANDS = [
-    bytes([0x03, 0x91, 0x00, 0x0D, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
-    bytes([0x07, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x16, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x15, 0x91, 0x00, 0x01, 0x00, 0x0E, 0x00, 0x00, 0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
-    bytes([0x15, 0x91, 0x00, 0x02, 0x00, 0x11, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
-    bytes([0x15, 0x91, 0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00]),
-    bytes([0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x0C, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]),
-    bytes([0x11, 0x91, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x0A, 0x91, 0x00, 0x08, 0x00, 0x14, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x35, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x0C, 0x91, 0x00, 0x04, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00]),
-    bytes([0x03, 0x91, 0x00, 0x0A, 0x00, 0x04, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00]),
-    bytes([0x10, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x01, 0x91, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00]),
-    bytes([0x03, 0x91, 0x00, 0x01, 0x00, 0x00, 0x00]),
-    bytes([0x0A, 0x91, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x03, 0x00, 0x00]),
-    bytes([0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-]
-
-
-def init_controller(dev):
-    cfg = dev.get_active_configuration()
-    intf1 = usb.util.find_descriptor(cfg, bInterfaceNumber=USB_INTERFACE_NUMBER)
-    ep_out = None
-    for ep in intf1:
-        if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT:
-            ep_out = ep.bEndpointAddress
-            break
-    if ep_out is None:
-        raise RuntimeError("Bulk OUT endpoint not found")
-    try:
-        usb.util.claim_interface(dev, USB_INTERFACE_NUMBER)
-    except usb.core.USBError:
-        pass
-    for cmd in INIT_COMMANDS:
-        try:
-            dev.write(ep_out, cmd)
-        except usb.core.USBError:
-            pass
-        time.sleep(0.05)
-    try:
-        usb.util.release_interface(dev, USB_INTERFACE_NUMBER)
-    except Exception:
-        pass
-    return cfg
-
-
-def unpack_12bit_triplet(data):
-    a = data[0] | ((data[1] & 0x0F) << 8)
-    b = (data[1] >> 4) | (data[2] << 4)
-    return a, b
+from core.controller_usb import Switch2ProControllerUSB
+from core.input_parser import unpack_12bit_triplet
 
 
 def main():
     print("=" * 80)
-    print(" Switch 2 Pro Controller  --  Stick Raw Value Diagnostic")
+    print(" Switch 2 Pro Controller -- Stick Raw Value Diagnostic (production path)")
     print("=" * 80)
-    print("\n[INFO] Move sticks and observe raw values.")
-    print("       For each stick, check if UP/DOWN changes raw Y value.")
+    print("\n[INFO] Move sticks in full circles, holding each extreme for a second.")
     print("       Press Ctrl+C to stop.\n")
 
-    dev = usb.core.find(idVendor=TARGET_VID, idProduct=TARGET_PID)
-    if dev is None:
+    controller = Switch2ProControllerUSB()
+    if not controller.find_and_connect():
         print("[FATAL] Device not found.")
         sys.exit(1)
+    controller.initialize_hid_mode()
+    print("[OK] Connected via production init path.\n")
 
-    dev.set_configuration()
-    cfg = init_controller(dev)
+    lmin = [4095, 4095]
+    lmax = [0, 0]
+    rmin = [4095, 4095]
+    rmax = [0, 0]
 
-    intf0 = usb.util.find_descriptor(cfg, bInterfaceNumber=0)
-    ep0_in = usb.util.find_descriptor(
-        intf0,
-        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN
-    )
-    if ep0_in is None:
-        print("[FATAL] Interrupt IN endpoint not found.")
-        sys.exit(1)
-
-    try:
-        usb.util.claim_interface(dev, 0)
-    except usb.core.USBError:
-        pass
-
+    counter = 0
+    last_print = 0.0
     try:
         while True:
-            try:
-                data = dev.read(ep0_in.bEndpointAddress, 64, timeout=100)
-                if data:
-                    payload = list(data)[1:]
-                    lx_raw, ly_raw = unpack_12bit_triplet(payload[5:8])
-                    rx_raw, ry_raw = unpack_12bit_triplet(payload[8:11])
+            payload = controller.read_input(timeout=100)
+            if payload is None:
+                continue
+            lx_raw, ly_raw = unpack_12bit_triplet(payload[10:13])
+            rx_raw, ry_raw = unpack_12bit_triplet(payload[13:16])
 
-                    print(
-                        f"\rLX={lx_raw:4d} LY={ly_raw:4d} | RX={rx_raw:4d} RY={ry_raw:4d}  ",
-                        end="", flush=True
-                    )
-            except usb.core.USBError:
-                pass
+            lmin[0] = min(lmin[0], lx_raw); lmax[0] = max(lmax[0], lx_raw)
+            lmin[1] = min(lmin[1], ly_raw); lmax[1] = max(lmax[1], ly_raw)
+            rmin[0] = min(rmin[0], rx_raw); rmax[0] = max(rmax[0], rx_raw)
+            rmin[1] = min(rmin[1], ry_raw); rmax[1] = max(rmax[1], ry_raw)
+
+            now = time.time()
+            if now - last_print >= 0.2:
+                last_print = now
+                hexdump = " ".join(f"{b:02X}" for b in payload[4:24])
+                print(
+                    f"LX={lx_raw:4d} LY={ly_raw:4d} | RX={rx_raw:4d} RY={ry_raw:4d}  "
+                    f"raw[4:24]={hexdump}"
+                )
     except KeyboardInterrupt:
         print("\n[INFO] Stopped.")
-
-    try:
-        usb.util.release_interface(dev, 0)
-    except Exception:
-        pass
-    print("Done.")
+    finally:
+        print(f"Final ranges: LX=[{lmin[0]},{lmax[0]}] LY=[{lmin[1]},{lmax[1]}] "
+              f"RX=[{rmin[0]},{rmax[0]}] RY=[{rmin[1]},{rmax[1]}]")
+        controller.cleanup()
+        print("Done.")
 
 
 if __name__ == "__main__":
