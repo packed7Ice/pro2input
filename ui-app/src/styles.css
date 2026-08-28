@@ -192,3 +192,129 @@ body {
   border-color: rgba(79, 140, 255, 0.5);
   color: var(--text);
 }
+
+.hidden {
+  display: none !important;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-button {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+  color: var(--text);
+}
+
+.tab-button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.settings-row .settings-label {
+  width: 150px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.settings-row select,
+.settings-row input[type="text"],
+.settings-row input[type="number"] {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.settings-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.settings-value {
+  width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.settings-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.settings-caption {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 24px;
+}
+
+.btn {
+  appearance: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.settings-status-msg {
+  font-size: 12px;
+  color: var(--text-dim);
+}

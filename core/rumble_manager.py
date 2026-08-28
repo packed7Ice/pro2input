@@ -101,6 +101,11 @@ class RumbleManager:
         with self._lock:
             return self._active_large / 255.0, self._active_small / 255.0
 
+    def set_strength(self, value: float):
+        """Update the overall rumble multiplier live. Thread-safe."""
+        with self._lock:
+            self._strength = max(0.0, min(value, 2.0))
+
     def send_rumble(self, large_motor: int, small_motor: int):
         """
         Set the desired rumble state.  Thread-safe.

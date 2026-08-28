@@ -20,11 +20,24 @@ BROADCAST_INTERVAL_SEC = 0.05
 
 
 class StatusServer:
-    """Broadcasts StatusState snapshots to all connected WebSocket clients."""
+    """
+    Broadcasts StatusState snapshots to all connected WebSocket clients, and
+    optionally dispatches inbound client commands (settings get/set/reset)
+    to a command_handler.
 
-    def __init__(self, status_state, port: int | None = None):
+    command_handler, if given, must expose:
+      on_connect() -> dict | None      called once when a client connects;
+                                        the returned message (if any) is sent
+                                        to that client only.
+      handle(msg: dict) -> dict | None called for each inbound JSON frame;
+                                        the returned message (if any) is
+                                        broadcast to ALL connected clients.
+    """
+
+    def __init__(self, status_state, port: int | None = None, command_handler=None):
         self.status_state = status_state
         self.port = port or int(os.environ.get("PRO2INPUT_STATUS_PORT", DEFAULT_PORT))
+        self.command_handler = command_handler
         self._clients: set = set()
 
     def start(self):
@@ -42,8 +55,24 @@ class StatusServer:
         # *_args absorbs the legacy `path` positional arg on older websockets versions.
         self._clients.add(websocket)
         try:
-            async for _ in websocket:
-                pass  # no inbound commands in this slice; ignore anything received
+            if self.command_handler is not None:
+                greeting = self.command_handler.on_connect()
+                if greeting is not None:
+                    await websocket.send(json.dumps(greeting))
+            async for raw in websocket:
+                if self.command_handler is None:
+                    continue
+                try:
+                    msg = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                try:
+                    response = self.command_handler.handle(msg)
+                except Exception as exc:
+                    print(f"[StatusServer] command handler error: {exc}")
+                    continue
+                if response is not None and self._clients:
+                    websockets.broadcast(self._clients, json.dumps(response))
         finally:
             self._clients.discard(websocket)
 
