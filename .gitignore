@@ -1,3 +1,9 @@
+# Tauri UI (ui-app/)
+ui-app/node_modules/
+ui-app/dist/
+ui-app/src-tauri/target/
+ui-app/src-tauri/gen/
+
 # Python
 __pycache__/
 *.py[cod]

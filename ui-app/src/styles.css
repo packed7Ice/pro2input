@@ -1,0 +1,194 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+  --bg: #14161c;
+  --panel: #1d2029;
+  --border: #2c3040;
+  --text: #e6e8ef;
+  --text-dim: #9aa0b4;
+  --accent: #4f8cff;
+  --green: #3ecf8e;
+  --red: #ff5d5d;
+  --amber: #ffb84f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.panel h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.badge-unknown {
+  color: var(--text-dim);
+  background: rgba(154, 160, 180, 0.12);
+  border-color: var(--border);
+}
+
+.badge-on-good {
+  color: var(--green);
+  background: rgba(62, 207, 142, 0.12);
+  border-color: rgba(62, 207, 142, 0.3);
+}
+
+.badge-on-bad {
+  color: var(--red);
+  background: rgba(255, 93, 93, 0.14);
+  border-color: rgba(255, 93, 93, 0.35);
+}
+
+.badge-off {
+  color: var(--text-dim);
+  background: rgba(154, 160, 180, 0.08);
+  border-color: var(--border);
+}
+
+.rumble-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rumble-label {
+  width: 52px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.bar {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+.rumble-pct {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.rumble-flags {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sticks-row {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+}
+
+.stick-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.stick-square {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.stick-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: top 40ms linear, left 40ms linear;
+}
+
+.stick-caption {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.button-pill {
+  text-align: center;
+  padding: 6px 4px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  transition: background 60ms, color 60ms, border-color 60ms;
+}
+
+.button-pill.pressed {
+  background: rgba(79, 140, 255, 0.18);
+  border-color: rgba(79, 140, 255, 0.5);
+  color: var(--text);
+}
