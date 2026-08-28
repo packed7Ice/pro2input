@@ -96,6 +96,11 @@ class RumbleManager:
 
         self._last_send_time = now
 
+    def get_intensity(self) -> tuple[float, float]:
+        """Return (large, small) as 0.0-1.0, for status/UI display only."""
+        with self._lock:
+            return self._active_large / 255.0, self._active_small / 255.0
+
     def send_rumble(self, large_motor: int, small_motor: int):
         """
         Set the desired rumble state.  Thread-safe.

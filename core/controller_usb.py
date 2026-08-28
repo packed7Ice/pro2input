@@ -156,6 +156,16 @@ class Switch2ProControllerUSB:
     def is_connected(self) -> bool:
         return self._usb_device is not None and not self._disconnected
 
+    @property
+    def rumble_stalled(self) -> bool:
+        """True while in post-STALL backoff (EPIPE recovery window)."""
+        return time.time() < self._rumble_backoff_until
+
+    @property
+    def rumble_suspended(self) -> bool:
+        """True once rumble has been permanently disabled this session (50 consecutive failures)."""
+        return self._rumble_fail_count >= 50
+
     def _input_loop(self):
         """
         Dedicated daemon thread: blocking Interrupt IN reads from Interface 0.

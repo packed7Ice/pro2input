@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pro2input</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>pro2input</h1>
+        <div id="conn-badge" class="badge badge-unknown">接続確認中...</div>
+      </header>
+
+      <section class="panel">
+        <h2>Rumble</h2>
+        <div class="rumble-row">
+          <span class="rumble-label">Large</span>
+          <div class="bar"><div id="rumble-large-fill" class="bar-fill"></div></div>
+          <span id="rumble-large-pct" class="rumble-pct">0%</span>
+        </div>
+        <div class="rumble-row">
+          <span class="rumble-label">Small</span>
+          <div class="bar"><div id="rumble-small-fill" class="bar-fill"></div></div>
+          <span id="rumble-small-pct" class="rumble-pct">0%</span>
+        </div>
+        <div class="rumble-flags">
+          <span id="stall-badge" class="badge badge-off">STALL</span>
+          <span id="suspend-badge" class="badge badge-off">SUSPENDED</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Sticks</h2>
+        <div class="sticks-row">
+          <div class="stick-box">
+            <div class="stick-square">
+              <div id="lstick-dot" class="stick-dot"></div>
+            </div>
+            <span class="stick-caption">Left</span>
+          </div>
+          <div class="stick-box">
+            <div class="stick-square">
+              <div id="rstick-dot" class="stick-dot"></div>
+            </div>
+            <span class="stick-caption">Right</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Buttons</h2>
+        <div id="button-grid" class="button-grid"></div>
+      </section>
+    </main>
+  </body>
+</html>
