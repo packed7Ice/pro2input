@@ -71,13 +71,14 @@ flowchart LR
 - [ViGEmBus Driver](https://github.com/nefarius/ViGEmBus/releases) — virtual Xbox 360 controller
 - [libusb-1.0.dll](https://libusb.info/) — place in `C:\Windows\System32`
 - [Zadig](https://zadig.akeo.ie/) — install libusbK for Interface 0 **and** Interface 1
+- For the desktop app (`ui-app/`): [Node.js](https://nodejs.org/) 18+ and [Rust](https://www.rust-lang.org/tools/install) — only needed to build/run it yourself, since no pre-built installer is published yet
 
 ### Installation
 
 ```bash
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-pip install pyusb vgamepad pynput
+pip install -r requirements.txt
 ```
 
 ### Driver Setup (Zadig) — Critical
@@ -93,7 +94,28 @@ The app uses pyusb for all USB access. The Windows HID driver (HidUsb) is not ne
 
 ### Usage
 
-#### Quickstart
+#### Desktop App (recommended)
+
+`ui-app/` is a Tauri (Rust + TypeScript) desktop UI: live controller/rumble
+status, an in-app settings editor (button mapping, stick inversion, rumble,
+FH6 UDP, keyboard mapping), and a system tray icon — closing the window
+minimizes to tray instead of quitting, so the controller keeps working in
+the background.
+
+```bash
+cd ui-app
+npm install
+npm run tauri dev      # development mode (spawns `python -m service.core_service` directly)
+npm run tauri build    # production build: standalone installer (MSI/NSIS) in
+                        # src-tauri/target/release/bundle/ — bundles the Python
+                        # core via PyInstaller, no separate Python install needed to run it
+```
+
+Dev mode still runs on your local Python install, so `pip install -r requirements.txt` (see Installation above) is required for `npm run tauri dev`. A `npm run tauri build` installer is fully self-contained.
+
+#### CLI / Headless
+
+`main.py` also works standalone, without the desktop UI — useful for scripted or console-only use.
 
 Double-click **`start.bat`** — the converter starts with FH6 UDP rumble enabled.
 
@@ -103,18 +125,11 @@ To disable UDP telemetry rumble (use XInput events only):
 start_no_udp.bat
 ```
 
-#### Command Line
+Or from the command line:
 
 ```bash
 python main.py           # default: UDP rumble enabled
 python main.py --no-udp  # XInput rumble only
-```
-
-#### Settings GUI
-
-```bash
-python tools/settings_ui.py
-# or double-click settings.bat
 ```
 
 ### Forza Horizon 6 Rumble Setup
@@ -126,7 +141,7 @@ FH6 does not send vibration data to virtual controllers (ViGEmBus limitation). T
 2. **IP Address**: `127.0.0.1` (same PC)
 3. **Port**: `5301`
 
-Start `main.py` — UDP packets are received automatically and drive the motors.
+Start the app (desktop UI or `python main.py`) — UDP packets are received automatically and drive the motors.
 
 Verify packets are arriving:
 ```bash
@@ -205,10 +220,10 @@ pip install pynput
 
 ```
 pro2input/
-├── main.py                      # Entry point
-├── start.bat                    # Launch with UDP rumble
-├── start_no_udp.bat             # Launch without UDP rumble
-├── settings.bat                 # Open settings GUI
+├── main.py                      # CLI entry point
+├── start.bat                    # Launch with UDP rumble (CLI)
+├── start_no_udp.bat             # Launch without UDP rumble (CLI)
+├── requirements.txt              # Python dependencies
 ├── config.json                  # User configuration
 ├── core/
 │   ├── constants.py             # USB constants, init commands, rumble packet spec
@@ -221,6 +236,13 @@ pro2input/
 │   └── xbox360_mapper.py        # Virtual Xbox 360 gamepad
 ├── config/
 │   └── settings.py              # JSON config loader
+├── service/                     # Headless backend for the desktop app
+│   ├── core_service.py          # Same device/rumble/mapping orchestration as main.py
+│   │                             # + a WebSocket status/settings server for ui-app/
+│   ├── status_server.py         # WebSocket broadcaster + settings command handler
+│   ├── settings_handler.py      # get/set/reset_settings over that WebSocket
+│   └── pyinstaller/              # PyInstaller spec to freeze core_service.py
+├── ui-app/                      # Tauri (Rust + TypeScript) desktop UI
 ├── tools/                       # Diagnostic scripts
 └── docs/                        # Technical documentation
 ```
@@ -235,7 +257,6 @@ pro2input/
 | `tools/fh6_udp_debug.py` | Live FH6 UDP packet inspector |
 | `tools/fh6_rumble_debug.py` | Log FH6 XInput rumble events |
 | `tools/rumble_comprehensive_test.py` | Multi-endpoint rumble diagnostic |
-| `tools/settings_ui.py` | GUI for button remapping and config |
 
 ### Troubleshooting
 
@@ -345,13 +366,14 @@ flowchart LR
 - [ViGEmBus ドライバー](https://github.com/nefarius/ViGEmBus/releases) — 仮想 Xbox 360 コントローラー用
 - [libusb-1.0.dll](https://libusb.info/) — `C:\Windows\System32` に配置
 - [Zadig](https://zadig.akeo.ie/) — Interface 0 **と** Interface 1 の両方に libusbK をインストール
+- デスクトップアプリ（`ui-app/`）を使う場合: [Node.js](https://nodejs.org/) 18 以降と [Rust](https://www.rust-lang.org/tools/install) — ビルド済みインストーラーは未配布のため、自分でビルド/実行する場合のみ必要
 
 ### インストール
 
 ```bash
 git clone https://github.com/packed7Ice/pro2input.git
 cd pro2input
-pip install pyusb vgamepad pynput
+pip install -r requirements.txt
 ```
 
 ### ドライバー設定（Zadig）— 重要
@@ -367,7 +389,25 @@ pip install pyusb vgamepad pynput
 
 ### 使い方
 
-#### 簡単起動
+#### デスクトップアプリ（推奨）
+
+`ui-app/` は Tauri（Rust + TypeScript）製のデスクトップUIです。コントローラー・振動のリアルタイム表示、アプリ内設定エディタ（ボタンマッピング・スティック反転・振動・FH6 UDP・キーボードマッピング）、システムトレイ常駐（ウィンドウを閉じても終了せずトレイに格納され、コントローラーは動作し続けます）に対応しています。
+
+```bash
+cd ui-app
+npm install
+npm run tauri dev      # 開発モード（`python -m service.core_service` を直接起動）
+npm run tauri build    # 本番ビルド: スタンドアロンインストーラー（MSI/NSIS）を
+                        # src-tauri/target/release/bundle/ に生成
+                        # （PyInstaller でPythonコアも同梱するため、
+                        # 実行にPythonの別途インストールは不要）
+```
+
+開発モード（`npm run tauri dev`）はローカルのPython環境をそのまま使うため、`pip install -r requirements.txt`（上記インストール参照）が必要です。`npm run tauri build` で生成したインストーラーは完全に自己完結しています。
+
+#### CLI / ヘッドレス
+
+デスクトップUIを使わず `main.py` 単体でも動作します。スクリプトからの起動やコンソールのみの利用に便利です。
 
 **`start.bat`** をダブルクリック — FH6 UDP 振動が有効な状態で起動します。
 
@@ -377,18 +417,11 @@ UDP テレメトリ振動を無効にする場合:
 start_no_udp.bat
 ```
 
-#### コマンドライン
+またはコマンドラインから:
 
 ```bash
 python main.py           # デフォルト: UDP 振動有効
 python main.py --no-udp  # XInput 振動のみ
-```
-
-#### 設定 GUI
-
-```bash
-python tools/settings_ui.py
-# または settings.bat をダブルクリック
 ```
 
 ### Forza Horizon 6 振動の設定
@@ -400,7 +433,7 @@ FH6 は ViGEmBus 仮想コントローラーに振動データを送りません
 2. **IP アドレス**: `127.0.0.1`（同じ PC の場合）
 3. **ポート**: `5301`
 
-`main.py` を起動すると UDP パケットを自動受信し、モーターを制御します。
+アプリを起動する（デスクトップUI、または `python main.py`）と UDP パケットを自動受信し、モーターを制御します。
 
 パケットが届いているか確認:
 ```bash
@@ -479,10 +512,10 @@ pip install pynput
 
 ```
 pro2input/
-├── main.py                      # エントリーポイント
-├── start.bat                    # UDP 振動あり起動
-├── start_no_udp.bat             # UDP 振動なし起動
-├── settings.bat                 # 設定 GUI を開く
+├── main.py                      # CLI エントリーポイント
+├── start.bat                    # UDP 振動あり起動（CLI）
+├── start_no_udp.bat             # UDP 振動なし起動（CLI）
+├── requirements.txt              # Python 依存パッケージ
 ├── config.json                  # ユーザー設定
 ├── core/
 │   ├── constants.py             # USB 定数・初期化コマンド・振動パケット仕様
@@ -495,6 +528,13 @@ pro2input/
 │   └── xbox360_mapper.py        # 仮想 Xbox 360 ゲームパッド
 ├── config/
 │   └── settings.py              # JSON 設定ローダー
+├── service/                     # デスクトップアプリ用のヘッドレスバックエンド
+│   ├── core_service.py          # main.py と同じ入出力・振動処理 +
+│   │                             # ui-app/ 向け WebSocket ステータス/設定サーバー
+│   ├── status_server.py         # WebSocket ブロードキャスト + 設定コマンド処理
+│   ├── settings_handler.py      # get/set/reset_settings（WebSocket経由）
+│   └── pyinstaller/              # core_service.py を単体exe化する PyInstaller spec
+├── ui-app/                      # Tauri（Rust + TypeScript）製デスクトップUI
 ├── tools/                       # 診断スクリプト群
 └── docs/                        # 技術ドキュメント
 ```
@@ -509,7 +549,6 @@ pro2input/
 | `tools/fh6_udp_debug.py` | FH6 UDP パケットのリアルタイム確認 |
 | `tools/fh6_rumble_debug.py` | FH6 XInput 振動イベントのログ記録 |
 | `tools/rumble_comprehensive_test.py` | 全エンドポイント振動診断 |
-| `tools/settings_ui.py` | ボタンリマッピング・設定 GUI |
 
 ### トラブルシューティング
 

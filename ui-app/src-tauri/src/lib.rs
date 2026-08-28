@@ -145,10 +145,27 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+fn show_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    let mut builder = tauri::Builder::default()
+        // Must be registered first: if another instance is already running,
+        // this exits the new process immediately (before .setup() runs, so
+        // spawn_core_service() never fires a second time and can't collide
+        // on the status server's port) and instead runs this callback in
+        // the *original* instance to bring its window forward.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_main_window(app);
+        }))
+        .plugin(tauri_plugin_opener::init());
 
     #[cfg(not(debug_assertions))]
     {
