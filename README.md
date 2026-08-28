@@ -277,6 +277,11 @@ pro2input/
 - USB errors are logged as `[USB] Rumble write failed`. If you see these, re-check Zadig.
 - Increase `hold_ms` in `config.json` to 200-300 to smooth brief gaps.
 
+**Conflicts with Steam Input**
+- If Steam is running, Steam Input can grab the virtual Xbox 360 controller pro2input creates (and sometimes the raw Switch 2 Pro Controller too) and apply its own remapping on top, causing double/odd input. This happens at Steam's controller-capture layer, outside pro2input's control — there's no app-side fix.
+- In Steam: **Settings -> Controller -> General Controller Settings**, uncheck **Xbox Configuration Support** (and **Nintendo Switch Pro Controller Configuration Support** if enabled) to stop Steam from capturing it globally.
+- Or, per-game: right-click the game in your Library -> **Properties -> Controller** -> set **Override for \[Game]** to **Disable Steam Input**.
+
 ### Technical Notes
 
 Vibration packets are sent to **Interface 0 Interrupt OUT (ep 0x01)**, not Bulk OUT.
@@ -568,6 +573,11 @@ pro2input/
 **振動がゲーム中に止まる**
 - USB エラーは `[USB] Rumble write failed` としてログに出ます。出ている場合は Zadig の設定を再確認してください。
 - `config.json` の `hold_ms` を 200〜300 に増やすと短い振動の途切れが改善されます。
+
+**Steam Input との競合**
+- Steam が起動していると、pro2input が作る仮想 Xbox 360 コントローラー（場合によっては Switch 2 Pro コントローラー本体も）を Steam Input が捕捉し、独自のリマッピングを重ねてしまうことがあります。これは Steam 側のコントローラー捕捉の仕組みによるもので、pro2input 側での対処はできません。
+- Steam の **設定 -> コントローラー -> 全般のコントローラー設定** で **Xbox 構成のサポート**（有効なら **Nintendo Switch Pro コントローラー構成のサポート** も）のチェックを外すと、Steam によるグローバルな捕捉を止められます。
+- あるいはゲームごとに: ライブラリでゲームを右クリック -> **プロパティ -> コントローラー** -> 該当ゲームの上書き設定を **Steam入力を無効化** にしてください。
 
 ### 技術メモ
 

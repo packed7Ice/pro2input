@@ -1,5 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[cfg(debug_assertions)]
+#[cfg_attr(not(debug_assertions), allow(unused_imports))]
 use std::path::PathBuf;
 use std::process::Child;
 #[cfg(debug_assertions)]
@@ -67,6 +67,14 @@ fn repo_root() -> PathBuf {
 
 #[cfg(debug_assertions)]
 fn spawn_core_service(_app: &AppHandle) -> Option<ManagedChild> {
+    use std::io::{BufRead, BufReader};
+    use std::os::windows::process::CommandExt;
+    use std::process::Stdio;
+
+    // Without this, spawning a console-subsystem child (python.exe) pops up
+    // its own visible console window alongside the app.
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     // Dev mode: run the interpreter directly against the repo's source, no
     // build step required. `-m service.core_service` (not the bare script
     // path) so Python puts the repo root on sys.path[0], letting
@@ -74,10 +82,27 @@ fn spawn_core_service(_app: &AppHandle) -> Option<ManagedChild> {
     let result = Command::new("python")
         .args(["-m", "service.core_service"])
         .current_dir(repo_root())
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn();
     match result {
-        Ok(child) => {
+        Ok(mut child) => {
             println!("[core_service] spawned (dev/python) pid={}", child.id());
+            if let Some(stdout) = child.stdout.take() {
+                std::thread::spawn(move || {
+                    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                        println!("[core_service] {line}");
+                    }
+                });
+            }
+            if let Some(stderr) = child.stderr.take() {
+                std::thread::spawn(move || {
+                    for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                        eprintln!("[core_service] {line}");
+                    }
+                });
+            }
             Some(ManagedChild::Dev(child))
         }
         Err(err) => {
@@ -93,13 +118,22 @@ fn spawn_core_service(app: &AppHandle) -> Option<ManagedChild> {
     // `bundle.externalBin` (see tauri.conf.json). Its stdout/stderr must be
     // drained continuously — an unread CommandEvent channel can eventually
     // block the child if its OS pipe buffer fills up.
-    let sidecar = match app.shell().sidecar("core_service") {
+    let mut sidecar = match app.shell().sidecar("core_service") {
         Ok(cmd) => cmd,
         Err(err) => {
             eprintln!("[core_service] failed to resolve sidecar: {err}");
             return None;
         }
     };
+    // Pin the working directory to the installed app's own folder (where
+    // config.json lives, next to the sidecar exe) rather than whatever CWD
+    // happened to launch ui-app.exe -- without this, config.json's
+    // relative path (config/settings.py) would resolve unpredictably.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            sidecar = sidecar.current_dir(dir);
+        }
+    }
     match sidecar.spawn() {
         Ok((mut rx, child)) => {
             println!("[core_service] spawned (release/sidecar) pid={}", child.pid());

@@ -63,10 +63,15 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    # Keep a console for now so build/runtime errors (esp. the vgamepad DLL
-    # load) are visible during bring-up. Switch to False once packaging is
-    # verified working end-to-end.
-    console=True,
+    # Packaging verified working end-to-end (see Slice 2 verification), so
+    # no visible console window. This is safe because Tauri's sidecar
+    # spawn (ShellExt::sidecar) always redirects stdout/stderr to pipes
+    # (drained in lib.rs's spawn_core_service), so sys.stdout/sys.stderr
+    # are valid file objects even in a windowed/noconsole build — the
+    # classic "sys.stdout is None" console-less crash only happens when a
+    # windowed exe is launched with no stdio redirection at all (e.g. a
+    # bare double-click from Explorer with nothing to pipe into).
+    console=False,
     disable_windowed_traceback=False,
 )
 
