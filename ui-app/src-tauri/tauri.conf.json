@@ -15,7 +15,8 @@
       {
         "title": "pro2input",
         "width": 560,
-        "height": 760
+        "height": 760,
+        "center": true
       }
     ],
     "security": {
