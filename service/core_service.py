@@ -26,6 +26,7 @@ from mapping.xbox360_mapper import Xbox360Mapper
 from config.settings import Settings
 from service.status_state import StatusState
 from service.status_server import StatusServer
+from service.settings_handler import SettingsCommandHandler
 
 STATUS_PUSH_INTERVAL_SEC = 1.0 / 30  # throttle status snapshot updates to ~30Hz
 
@@ -75,7 +76,8 @@ def main():
         rumble={"large": 0.0, "small": 0.0, "stalled": False, "suspended": False},
         input={"buttons": _default_buttons(), "sticks": _default_sticks()},
     )
-    status_server = StatusServer(status_state)
+    command_handler = SettingsCommandHandler(settings, rumble=None)
+    status_server = StatusServer(status_state, command_handler=command_handler)
     status_server.start()
     print(f"\n[INFO] Status server listening on ws://127.0.0.1:{status_server.port}")
 
@@ -107,6 +109,7 @@ def main():
         rumble = RumbleManager(controller, strength=strength)
         mapper.register_rumble_callback(rumble.on_xinput_rumble)
         rumble.start()
+        command_handler.rumble = rumble
         print("[OK ] Rumble manager started (experimental).")
     else:
         print("\n[INFO] Rumble is disabled in config.")

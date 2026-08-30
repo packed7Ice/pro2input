@@ -7,12 +7,19 @@ Settings are persisted as JSON in `config.json`.
 
 import json
 import os
+import threading
 from pathlib import Path
 
 CONFIG_PATH = Path("config.json")
 
 DEFAULT_CONFIG = {
     "version": 1,
+    "app": {
+        # What the desktop app's titlebar close (X) button does:
+        # "minimize" -> hide to the system tray, core service keeps running
+        # "quit"     -> fully exit (same as the tray "Quit" menu item)
+        "close_action": "minimize",
+    },
     "button_mapping": {
         "B": "B",
         "A": "A",
@@ -74,52 +81,60 @@ class Settings:
     def __init__(self, path: Path = CONFIG_PATH):
         self.path = path
         self.data = {}
+        # RLock (not Lock): load()/reset_to_defaults() call save() internally,
+        # which would deadlock a non-reentrant lock.
+        self._lock = threading.RLock()
         self.load()
 
     def load(self):
         """Load config from JSON file, or create default if missing."""
-        if self.path.exists():
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    self.data = json.load(f)
-                # Merge missing keys from defaults
-                self._merge_defaults(DEFAULT_CONFIG, self.data)
-            except (json.JSONDecodeError, OSError):
+        with self._lock:
+            if self.path.exists():
+                try:
+                    with open(self.path, "r", encoding="utf-8") as f:
+                        self.data = json.load(f)
+                    # Merge missing keys from defaults
+                    self._merge_defaults(DEFAULT_CONFIG, self.data)
+                except (json.JSONDecodeError, OSError):
+                    self.data = DEFAULT_CONFIG.copy()
+            else:
                 self.data = DEFAULT_CONFIG.copy()
-        else:
-            self.data = DEFAULT_CONFIG.copy()
-            self.save()
+                self.save()
 
     def save(self):
         """Save current config to JSON file."""
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
+        with self._lock:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
 
     def get(self, key: str, default=None):
         """Dot-notation access to nested values, e.g. 'stick.left.invert_y'."""
-        keys = key.split(".")
-        value = self.data
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
-            else:
-                return default
-        return value
+        with self._lock:
+            keys = key.split(".")
+            value = self.data
+            for k in keys:
+                if isinstance(value, dict) and k in value:
+                    value = value[k]
+                else:
+                    return default
+            return value
 
     def set(self, key: str, value):
         """Dot-notation set."""
-        keys = key.split(".")
-        target = self.data
-        for k in keys[:-1]:
-            if k not in target:
-                target[k] = {}
-            target = target[k]
-        target[keys[-1]] = value
+        with self._lock:
+            keys = key.split(".")
+            target = self.data
+            for k in keys[:-1]:
+                if k not in target:
+                    target[k] = {}
+                target = target[k]
+            target[keys[-1]] = value
 
     def reset_to_defaults(self):
         """Reset all settings to factory defaults."""
-        self.data = DEFAULT_CONFIG.copy()
-        self.save()
+        with self._lock:
+            self.data = DEFAULT_CONFIG.copy()
+            self.save()
 
     @staticmethod
     def _merge_defaults(defaults: dict, current: dict):

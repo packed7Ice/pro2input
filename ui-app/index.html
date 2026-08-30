@@ -15,46 +15,91 @@
         <div id="conn-badge" class="badge badge-unknown">接続確認中...</div>
       </header>
 
-      <section class="panel">
-        <h2>Rumble</h2>
-        <div class="rumble-row">
-          <span class="rumble-label">Large</span>
-          <div class="bar"><div id="rumble-large-fill" class="bar-fill"></div></div>
-          <span id="rumble-large-pct" class="rumble-pct">0%</span>
-        </div>
-        <div class="rumble-row">
-          <span class="rumble-label">Small</span>
-          <div class="bar"><div id="rumble-small-fill" class="bar-fill"></div></div>
-          <span id="rumble-small-pct" class="rumble-pct">0%</span>
-        </div>
-        <div class="rumble-flags">
-          <span id="stall-badge" class="badge badge-off">STALL</span>
-          <span id="suspend-badge" class="badge badge-off">SUSPENDED</span>
-        </div>
-      </section>
+      <nav class="tabs">
+        <button class="tab-button active" data-tab="status" type="button">ステータス</button>
+        <button class="tab-button" data-tab="settings" type="button">設定</button>
+      </nav>
 
-      <section class="panel">
-        <h2>Sticks</h2>
-        <div class="sticks-row">
-          <div class="stick-box">
-            <div class="stick-square">
-              <div id="lstick-dot" class="stick-dot"></div>
-            </div>
-            <span class="stick-caption">Left</span>
+      <div id="status-panel-root">
+        <section class="panel">
+          <h2>Rumble</h2>
+          <div class="rumble-row">
+            <span class="rumble-label">Large</span>
+            <div class="bar"><div id="rumble-large-fill" class="bar-fill"></div></div>
+            <span id="rumble-large-pct" class="rumble-pct">0%</span>
           </div>
-          <div class="stick-box">
-            <div class="stick-square">
-              <div id="rstick-dot" class="stick-dot"></div>
-            </div>
-            <span class="stick-caption">Right</span>
+          <div class="rumble-row">
+            <span class="rumble-label">Small</span>
+            <div class="bar"><div id="rumble-small-fill" class="bar-fill"></div></div>
+            <span id="rumble-small-pct" class="rumble-pct">0%</span>
           </div>
-        </div>
-      </section>
+          <div class="rumble-flags">
+            <span id="stall-badge" class="badge badge-off">STALL</span>
+            <span id="suspend-badge" class="badge badge-off">SUSPENDED</span>
+          </div>
+        </section>
 
-      <section class="panel">
-        <h2>Buttons</h2>
-        <div id="button-grid" class="button-grid"></div>
-      </section>
+        <section class="panel">
+          <h2>Sticks</h2>
+          <div class="sticks-row">
+            <div class="stick-box">
+              <div class="stick-square">
+                <div id="lstick-dot" class="stick-dot"></div>
+              </div>
+              <span class="stick-caption">Left</span>
+            </div>
+            <div class="stick-box">
+              <div class="stick-square">
+                <div id="rstick-dot" class="stick-dot"></div>
+              </div>
+              <span class="stick-caption">Right</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Buttons</h2>
+          <div id="button-grid" class="button-grid"></div>
+        </section>
+      </div>
+
+      <div id="settings-panel-root" class="hidden">
+        <section class="panel">
+          <h2>App</h2>
+          <div id="settings-app"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Button Mapping</h2>
+          <div id="settings-button-mapping"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Sticks</h2>
+          <div id="settings-sticks"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Rumble</h2>
+          <div id="settings-rumble"></div>
+        </section>
+
+        <section class="panel">
+          <h2>FH6 UDP Telemetry</h2>
+          <div id="settings-fh6"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Keyboard Mapping</h2>
+          <div id="settings-keyboard"></div>
+        </section>
+
+        <div class="settings-actions">
+          <button id="settings-reset" type="button" class="btn btn-secondary">初期値に戻す</button>
+          <button id="settings-save" type="button" class="btn btn-primary" disabled>保存</button>
+          <span id="settings-status-msg" class="settings-status-msg"></span>
+        </div>
+      </div>
     </main>
   </body>
 </html>

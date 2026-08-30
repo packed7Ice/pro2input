@@ -22,7 +22,7 @@ SDL data offsets (from HandleSwitchProState):
 """
 
 from core.constants import (
-    STICK_CENTER, STICK_SCALE, STICK_SATURATION_MARGIN,
+    STICK_SCALE, STICK_SATURATION_MARGIN, STICK_DEFLECTION_FLOOR,
     TRIGGER_DIGITAL_ON, TRIGGER_DIGITAL_OFF,
 )
 
@@ -43,15 +43,29 @@ class AxisCalibrator:
     of full scale. This tracks the largest deflection seen so far on each
     side of center and saturates readings within STICK_SATURATION_MARGIN
     of that deflection to +/-32767.
+
+    The center is calibrated from the first raw sample received (assumed to
+    be the physical rest position at connect time) rather than a fixed
+    theoretical constant, since a given stick's true center can sit a bit
+    off the theoretical midpoint. `_pos_extreme`/`_neg_extreme` start at
+    STICK_DEFLECTION_FLOOR rather than ~0: seeding them near-zero meant a
+    single sample with any small nonzero delta (idle ADC jitter, or the
+    rest-position calibration itself landing slightly off on a later
+    sample) was instantly treated as "the largest deflection ever seen",
+    saturating that reading to full scale until a real, larger swing
+    corrected it.
     """
 
-    def __init__(self, center: float = STICK_CENTER, margin: float = STICK_SATURATION_MARGIN):
-        self.center = center
+    def __init__(self, margin: float = STICK_SATURATION_MARGIN):
+        self.center: float | None = None
         self.margin = margin
-        self._pos_extreme = 1.0
-        self._neg_extreme = 1.0
+        self._pos_extreme = STICK_DEFLECTION_FLOOR
+        self._neg_extreme = STICK_DEFLECTION_FLOOR
 
     def normalize(self, raw_value: int) -> int:
+        if self.center is None:
+            self.center = float(raw_value)
+
         delta = raw_value - self.center
         if delta >= 0:
             self._pos_extreme = max(self._pos_extreme, delta)
