@@ -113,6 +113,8 @@ npm run tauri build    # production build: standalone installer (MSI/NSIS) in
 
 Dev mode still runs on your local Python install, so `pip install -r requirements.txt` (see Installation above) is required for `npm run tauri dev`. A `npm run tauri build` installer is fully self-contained.
 
+> **Always build/run through the `tauri` CLI** (`npm run tauri dev` / `npm run tauri build`), never bare `cargo build`/`cargo run` from `src-tauri/`. The CLI passes build-mode flags that decide whether the app loads the embedded frontend or the Vite dev server; a bare `cargo build --release` produces an exe that still tries to reach `http://localhost:1420` and fails with `ERR_CONNECTION_REFUSED` on launch since no dev server is running for it.
+
 #### CLI / Headless
 
 `main.py` also works standalone, without the desktop UI — useful for scripted or console-only use.
@@ -409,6 +411,8 @@ npm run tauri build    # 本番ビルド: スタンドアロンインストー�
 ```
 
 開発モード（`npm run tauri dev`）はローカルのPython環境をそのまま使うため、`pip install -r requirements.txt`（上記インストール参照）が必要です。`npm run tauri build` で生成したインストーラーは完全に自己完結しています。
+
+> **必ず`tauri` CLI経由でビルド/実行してください**（`npm run tauri dev` / `npm run tauri build`）。`src-tauri/`で`cargo build`/`cargo run`を直接叩くのは避けてください。CLIが渡すビルドモード用フラグによって、埋め込みフロントエンドを読むかViteの開発サーバーを読むかが決まります。素の`cargo build --release`で作ったexeは開発サーバー用のURL（`http://localhost:1420`）を読みに行ってしまい、サーバーが起動していないため`ERR_CONNECTION_REFUSED`で起動に失敗します。
 
 #### CLI / ヘッドレス
 
