@@ -1,5 +1,4 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[cfg_attr(not(debug_assertions), allow(unused_imports))]
 use std::path::PathBuf;
 use std::process::Child;
 #[cfg(debug_assertions)]
@@ -63,6 +62,39 @@ struct QuitRequested(Mutex<bool>);
 #[cfg(debug_assertions)]
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+}
+
+/// Where config.json lives -- same directory core_service.py uses (repo
+/// root in dev, next to the sidecar exe in release; see spawn_core_service).
+fn config_json_path() -> PathBuf {
+    #[cfg(debug_assertions)]
+    {
+        repo_root().join("config.json")
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("config.json")))
+            .unwrap_or_else(|| PathBuf::from("config.json"))
+    }
+}
+
+/// Reads config.json fresh (Python is the sole writer, via the Settings
+/// tab's existing set_settings WebSocket flow) to check the user's close
+/// button preference. Read-only from Rust's side, so no synchronization
+/// with core_service.py's writes is needed.
+fn close_action_is_quit() -> bool {
+    let Ok(text) = std::fs::read_to_string(config_json_path()) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    json.get("app")
+        .and_then(|a| a.get("close_action"))
+        .and_then(|v| v.as_str())
+        == Some("quit")
 }
 
 #[cfg(debug_assertions)]
@@ -187,6 +219,14 @@ fn show_main_window(app: &AppHandle) {
     let _ = window.set_focus();
 }
 
+/// Full teardown: used by the tray "Quit" item and by CloseRequested when
+/// the user's close_action setting is "quit".
+fn perform_quit(app: &AppHandle) {
+    *app.state::<QuitRequested>().0.lock().unwrap() = true;
+    kill_core_service(app);
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -235,11 +275,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "toggle_window" => toggle_main_window(app),
                     "restart_core" => restart_core_service(app),
-                    "quit" => {
-                        *app.state::<QuitRequested>().0.lock().unwrap() = true;
-                        kill_core_service(app);
-                        app.exit(0);
-                    }
+                    "quit" => perform_quit(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -261,10 +297,13 @@ pub fn run() {
                 let app = window.app_handle();
                 let quit_requested = *app.state::<QuitRequested>().0.lock().unwrap();
                 if quit_requested {
-                    // Real quit (tray "Quit" already killed the core service):
+                    // Already being torn down via the tray "Quit" path;
                     // allow the default close to proceed.
+                } else if close_action_is_quit() {
+                    // User's close_action setting (Settings tab) is "quit".
+                    perform_quit(app);
                 } else {
-                    // Titlebar X: minimize to tray, keep the core service running.
+                    // Default: minimize to tray, keep the core service running.
                     api.prevent_close();
                     let _ = window.hide();
                 }

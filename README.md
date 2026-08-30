@@ -106,12 +106,14 @@ the background.
 cd ui-app
 npm install
 npm run tauri dev      # development mode (spawns `python -m service.core_service` directly)
-npm run tauri build    # production build: standalone installer (MSI/NSIS) in
+npm run build:app      # quick standalone exe at src-tauri/target/release/ui-app.exe,
+                        # skips MSI/NSIS installer generation (~1 min)
+npm run tauri build    # full production build: standalone installer (MSI/NSIS) in
                         # src-tauri/target/release/bundle/ — bundles the Python
                         # core via PyInstaller, no separate Python install needed to run it
 ```
 
-Dev mode still runs on your local Python install, so `pip install -r requirements.txt` (see Installation above) is required for `npm run tauri dev`. A `npm run tauri build` installer is fully self-contained.
+Dev mode still runs on your local Python install, so `pip install -r requirements.txt` (see Installation above) is required for `npm run tauri dev`. `npm run build:app` and `npm run tauri build` both produce a fully self-contained exe; use `build:app` for a quick sanity check of a real (non-dev) build, and `tauri build` when you actually need the installer.
 
 > **Always build/run through the `tauri` CLI** (`npm run tauri dev` / `npm run tauri build`), never bare `cargo build`/`cargo run` from `src-tauri/`. The CLI passes build-mode flags that decide whether the app loads the embedded frontend or the Vite dev server; a bare `cargo build --release` produces an exe that still tries to reach `http://localhost:1420` and fails with `ERR_CONNECTION_REFUSED` on launch since no dev server is running for it.
 
@@ -404,13 +406,15 @@ pip install -r requirements.txt
 cd ui-app
 npm install
 npm run tauri dev      # 開発モード（`python -m service.core_service` を直接起動）
-npm run tauri build    # 本番ビルド: スタンドアロンインストーラー（MSI/NSIS）を
+npm run build:app      # インストーラー生成を省略した簡易ビルド（約1分）:
+                        # src-tauri/target/release/ui-app.exe が単体で動作
+npm run tauri build    # フル本番ビルド: スタンドアロンインストーラー（MSI/NSIS）を
                         # src-tauri/target/release/bundle/ に生成
                         # （PyInstaller でPythonコアも同梱するため、
                         # 実行にPythonの別途インストールは不要）
 ```
 
-開発モード（`npm run tauri dev`）はローカルのPython環境をそのまま使うため、`pip install -r requirements.txt`（上記インストール参照）が必要です。`npm run tauri build` で生成したインストーラーは完全に自己完結しています。
+開発モード（`npm run tauri dev`）はローカルのPython環境をそのまま使うため、`pip install -r requirements.txt`（上記インストール参照）が必要です。`npm run build:app`・`npm run tauri build`のどちらも完全に自己完結したexeを生成します。本番相当の動作を素早く確認したいときは`build:app`、インストーラーが必要なときは`tauri build`を使ってください。
 
 > **必ず`tauri` CLI経由でビルド/実行してください**（`npm run tauri dev` / `npm run tauri build`）。`src-tauri/`で`cargo build`/`cargo run`を直接叩くのは避けてください。CLIが渡すビルドモード用フラグによって、埋め込みフロントエンドを読むかViteの開発サーバーを読むかが決まります。素の`cargo build --release`で作ったexeは開発サーバー用のURL（`http://localhost:1420`）を読みに行ってしまい、サーバーが起動していないため`ERR_CONNECTION_REFUSED`で起動に失敗します。
 

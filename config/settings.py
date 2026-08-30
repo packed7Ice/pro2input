@@ -14,6 +14,12 @@ CONFIG_PATH = Path("config.json")
 
 DEFAULT_CONFIG = {
     "version": 1,
+    "app": {
+        # What the desktop app's titlebar close (X) button does:
+        # "minimize" -> hide to the system tray, core service keeps running
+        # "quit"     -> fully exit (same as the tray "Quit" menu item)
+        "close_action": "minimize",
+    },
     "button_mapping": {
         "B": "B",
         "A": "A",

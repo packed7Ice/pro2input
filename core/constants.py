@@ -84,6 +84,15 @@ STICK_SCALE = 32767
 # so max tilt reliably reaches +/-32767 after a couple of full swings.
 STICK_SATURATION_MARGIN = 0.92
 
+# Seed value for each axis's largest-observed-deflection tracker (see
+# AxisCalibrator in input_parser.py). Must be big enough that idle stick
+# noise / rest-position jitter (a handful of raw units) never gets mistaken
+# for "the largest deflection ever seen" -- which would instantly saturate
+# normalize() to full scale on the very first reading -- but small enough
+# that real stick movement immediately exceeds it, letting the calibration
+# still grow toward the true (smaller than theoretical) mechanical max.
+STICK_DEFLECTION_FLOOR = STICK_CENTER * 0.1
+
 # Switch 2 Pro reports ZL/ZR as digital buttons only.
 # We synthesize analog trigger values from button states.
 TRIGGER_DIGITAL_ON = 255

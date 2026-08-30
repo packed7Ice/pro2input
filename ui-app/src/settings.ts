@@ -31,6 +31,7 @@ export function initSettingsPanel() {
   const resetBtn = document.getElementById("settings-reset") as HTMLButtonElement;
   const statusMsg = document.getElementById("settings-status-msg") as HTMLSpanElement;
 
+  const appContainer = document.getElementById("settings-app") as HTMLDivElement;
   const buttonMappingContainer = document.getElementById("settings-button-mapping") as HTMLDivElement;
   const sticksContainer = document.getElementById("settings-sticks") as HTMLDivElement;
   const rumbleContainer = document.getElementById("settings-rumble") as HTMLDivElement;
@@ -53,6 +54,31 @@ export function initSettingsPanel() {
     pendingValues[path] = value;
     saveBtn.disabled = false;
     statusMsg.textContent = "未保存の変更があります";
+  }
+
+  function renderApp() {
+    appContainer.innerHTML = "";
+    const current = String(getPath(latestData, "app.close_action") ?? "minimize");
+    const options: { value: string; label: string }[] = [
+      { value: "minimize", label: "トレイに最小化する（コントローラーはバックグラウンドで動作継続）" },
+      { value: "quit", label: "完全に終了する" },
+    ];
+    for (const opt of options) {
+      const row = document.createElement("label");
+      row.className = "settings-checkbox-row";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "close-action";
+      input.value = opt.value;
+      input.checked = current === opt.value;
+      input.addEventListener("change", () => {
+        if (input.checked) markDirty("app.close_action", opt.value);
+      });
+      row.appendChild(input);
+      row.appendChild(document.createTextNode(opt.label));
+      appContainer.appendChild(row);
+    }
+    addCaption(appContainer, "ウィンドウを閉じる（×）ボタンを押したときの動作です。次回閉じるときから反映されます。");
   }
 
   function renderButtonMapping() {
@@ -209,6 +235,7 @@ export function initSettingsPanel() {
     saveBtn.disabled = true;
     statusMsg.textContent = "";
 
+    renderApp();
     renderButtonMapping();
     renderSticks();
     renderRumble();
